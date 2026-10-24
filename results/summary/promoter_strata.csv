@@ -1,0 +1,22 @@
+stratum_type,stratum,seed,n_proteins,fmax_esm2_prot_tax,fmax_all,delta
+provenance,xref,0,12879,0.455257,0.456837,0.00158
+provenance,alignment_exact,0,2355,0.442592,0.453307,0.010715
+provenance,alignment_proxy,0,709,0.448118,0.460614,0.012496
+provenance,none (imputed),0,538,0.521499,0.511646,-0.009852
+kingdom,plants,0,3080,0.457705,0.458788,0.001082
+kingdom,non-plants,0,13401,0.455149,0.456844,0.001695
+all,all test proteins,0,16481,0.45478,0.457026,0.002246
+provenance,xref,1,12944,0.459017,0.45826,-0.000757
+provenance,alignment_exact,1,2393,0.447693,0.448175,0.000481
+provenance,alignment_proxy,1,703,0.455103,0.462102,0.006999
+provenance,none (imputed),1,441,0.524312,0.522992,-0.00132
+kingdom,plants,1,3086,0.460785,0.465249,0.004464
+kingdom,non-plants,1,13395,0.458825,0.45718,-0.001645
+all,all test proteins,1,16481,0.458408,0.45766,-0.000748
+provenance,xref,2,12964,0.458458,0.456655,-0.001803
+provenance,alignment_exact,2,2369,0.45373,0.444015,-0.009715
+provenance,alignment_proxy,2,644,0.476398,0.460159,-0.016239
+provenance,none (imputed),2,504,0.511394,0.483436,-0.027958
+kingdom,plants,2,3070,0.46811,0.462598,-0.005513
+kingdom,non-plants,2,13411,0.457896,0.454396,-0.0035
+all,all test proteins,2,16481,0.459001,0.455262,-0.003738

@@ -1,0 +1,2 @@
+config,seed,official_f_micro_w_NK_mean,official_f_micro_w_LK_mean,official_f_micro_w_PK_mean,official_f_micro_w_overall_mean,official_f_w_NK_mean,official_f_w_LK_mean,official_f_w_PK_mean,official_f_w_overall_mean,official_s_w_NK_mean,official_s_w_LK_mean,official_s_w_PK_mean,official_s_w_overall_mean
+esm2,0,0.308433,0.342533,0.109933,0.253633,0.3925,0.398167,0.162333,0.317667,13.024667,11.645633,7.804667,10.824989

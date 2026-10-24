@@ -1,0 +1,27 @@
+{
+  "config": "esm2_prot",
+  "feature_groups": [
+    "esm2",
+    "protein"
+  ],
+  "question": "value of handcrafted features",
+  "trainer_flags": [
+    "--no-knn",
+    "--no-taxon-prior",
+    "--checkpoint-taxon-weight",
+    "0",
+    "--test-size",
+    "0.2",
+    "--epochs",
+    "100",
+    "--overwrite",
+    "--no-taxonomy-features",
+    "--no-promoter-features"
+  ],
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "git_revision": "2c147c8-dirty"
+}
