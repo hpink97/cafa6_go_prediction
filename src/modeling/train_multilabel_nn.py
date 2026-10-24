@@ -107,8 +107,14 @@ class MultilabelGOModel(nn.Module):
         bottleneck_dim: int = 256,
         branch_dropout: float = 0.1,
         trunk_dropout: float = 0.2,
+        projection_dims: dict[str, int] | None = None,
+        promoter_fusion_dim: int = PROMOTER_FUSION_DIM,
+        trunk_layers: int = 2,
     ) -> None:
         super().__init__()
+        if trunk_layers < 2:
+            raise ValueError("trunk_layers must be at least 2 (input and bottleneck layers)")
+        projection_dims = {**DEFAULT_PROJECTION_DIMS, **(projection_dims or {})}
         self.group_names = tuple(feature_groups)
         self.promoter_group_names = tuple(name for name in self.group_names if name.startswith("promoter_"))
         self.non_promoter_group_names = tuple(name for name in self.group_names if not name.startswith("promoter_"))
@@ -117,7 +123,7 @@ class MultilabelGOModel(nn.Module):
         promoter_dim = 0
 
         for group_name, indices in feature_groups.items():
-            projection_dim = DEFAULT_PROJECTION_DIMS[group_name]
+            projection_dim = projection_dims[group_name]
             buffer_name = f"{group_name}_indices"
             self.register_buffer(buffer_name, torch.tensor(indices, dtype=torch.long), persistent=False)
             self.branches[group_name] = nn.Sequential(
@@ -134,20 +140,18 @@ class MultilabelGOModel(nn.Module):
         self.promoter_fusion: nn.Module | None = None
         if promoter_dim:
             self.promoter_fusion = nn.Sequential(
-                nn.Linear(promoter_dim, PROMOTER_FUSION_DIM),
+                nn.Linear(promoter_dim, promoter_fusion_dim),
                 nn.GELU(),
                 nn.Dropout(branch_dropout),
             )
-        fused_dim = non_promoter_dim + (PROMOTER_FUSION_DIM if promoter_dim else 0)
+        fused_dim = non_promoter_dim + (promoter_fusion_dim if promoter_dim else 0)
 
-        self.trunk = nn.Sequential(
-            nn.Linear(fused_dim, trunk_dim),
-            nn.GELU(),
-            nn.Dropout(trunk_dropout),
-            nn.Linear(trunk_dim, bottleneck_dim),
-            nn.GELU(),
-            nn.Dropout(trunk_dropout),
-        )
+        # Two layers keep the original module layout, so older checkpoints still load.
+        widths = [fused_dim] + [trunk_dim] * (trunk_layers - 1) + [bottleneck_dim]
+        trunk: list[nn.Module] = []
+        for in_dim, out_dim in zip(widths[:-1], widths[1:]):
+            trunk += [nn.Linear(in_dim, out_dim), nn.GELU(), nn.Dropout(trunk_dropout)]
+        self.trunk = nn.Sequential(*trunk)
         self.classifier = nn.Linear(bottleneck_dim, n_terms)
 
     def forward(self, features: torch.Tensor) -> torch.Tensor:
@@ -549,6 +553,9 @@ def run(
     promoter_agront_dir: Path | None,
     promoter_feature_cache: Path,
     promoter_knn_k: int,
+    projection_dims: dict[str, int] | None = None,
+    promoter_fusion_dim: int = PROMOTER_FUSION_DIM,
+    trunk_layers: int = 2,
 ) -> None:
     if output_dir.exists() and any(output_dir.iterdir()) and not overwrite:
         raise FileExistsError(f"Output directory {output_dir} is not empty; pass --overwrite to replace its artifacts")
@@ -756,6 +763,9 @@ def run(
         bottleneck_dim=bottleneck_dim,
         branch_dropout=branch_dropout,
         trunk_dropout=trunk_dropout,
+        projection_dims=projection_dims,
+        promoter_fusion_dim=promoter_fusion_dim,
+        trunk_layers=trunk_layers,
     ).to(device)
     criterion, pos_weights = _make_loss(
         loss_name,
@@ -771,6 +781,7 @@ def run(
         lr=learning_rate,
         weight_decay=weight_decay,
     )
+    projection_dims = {**DEFAULT_PROJECTION_DIMS, **(projection_dims or {})}
     n_parameters = sum(parameter.numel() for parameter in model.parameters())
     LOGGER.info("model has %d trainable parameters", n_parameters)
 
@@ -1123,8 +1134,9 @@ def run(
         {
             "model_state_dict": best_state,
             "feature_groups": groups,
-            "projection_dims": DEFAULT_PROJECTION_DIMS,
-            "promoter_fusion_dim": PROMOTER_FUSION_DIM,
+            "projection_dims": projection_dims,
+            "promoter_fusion_dim": promoter_fusion_dim,
+            "trunk_layers": trunk_layers,
             "terms": terms,
             "base_terms": base_terms,
             "ancestor_closure": ancestor_closure,
@@ -1213,8 +1225,9 @@ def run(
         "gradient_clip": gradient_clip,
         "device": str(device),
         "n_parameters": n_parameters,
-        "projection_dims": DEFAULT_PROJECTION_DIMS,
-        "promoter_fusion_dim": PROMOTER_FUSION_DIM,
+        "projection_dims": projection_dims,
+        "promoter_fusion_dim": promoter_fusion_dim,
+        "trunk_layers": trunk_layers,
         "agront_nonapplicable_rows_zeroed_after_scaling": True,
         "max_train_samples": max_train_samples,
         "max_validation_samples": max_validation_samples,
@@ -1306,6 +1319,15 @@ def main() -> None:
     parser.add_argument("--trunk-dropout", type=float, default=0.2)
     parser.add_argument("--trunk-dim", type=int, default=512)
     parser.add_argument("--bottleneck-dim", type=int, default=256)
+    parser.add_argument("--trunk-layers", type=int, default=2, help="Linear layers in the shared trunk, including the bottleneck")
+    parser.add_argument(
+        "--projection-dims",
+        nargs="+",
+        default=[],
+        metavar="GROUP=DIM",
+        help=f"Override branch projection widths, e.g. promoter_nt=64 (defaults: {DEFAULT_PROJECTION_DIMS})",
+    )
+    parser.add_argument("--promoter-fusion-dim", type=int, default=PROMOTER_FUSION_DIM, help="Width of the fused promoter vector entering the trunk")
     parser.add_argument("--loss", choices=("bce", "weighted_bce", "asymmetric"), default="weighted_bce")
     parser.add_argument("--max-pos-weight", type=float, default=20.0)
     parser.add_argument("--gamma-negative", type=float, default=4.0)
@@ -1373,6 +1395,15 @@ def main() -> None:
         datefmt="%H:%M:%S",
     )
 
+    try:
+        arguments["projection_dims"] = {
+            group: int(dim) for group, dim in (item.split("=", 1) for item in arguments.pop("projection_dims"))
+        }
+    except ValueError:
+        parser.error("--projection-dims takes GROUP=DIM pairs")
+    unknown = set(arguments["projection_dims"]) - set(DEFAULT_PROJECTION_DIMS)
+    if unknown:
+        parser.error(f"unknown projection groups {sorted(unknown)}; choose from {sorted(DEFAULT_PROJECTION_DIMS)}")
     arguments["loss_name"] = arguments.pop("loss")
     arguments["device_name"] = arguments.pop("device")
     no_promoters = arguments.pop("no_promoter_features")
