@@ -7,6 +7,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from sklearn.metrics import roc_auc_score
 
 NAMESPACE_TO_ASPECT = {
     "biological_process": "P",
@@ -390,3 +391,40 @@ def cafa_fmax(
 
     summary["cafa_fmax_mean"] = float(np.mean(aspect_fmax)) if aspect_fmax else float("nan")
     return summary, pd.DataFrame(curve_rows)
+
+def roc_auc_summary(
+    targets: np.ndarray,
+    scores: np.ndarray,
+    aspects: np.ndarray,
+    *,
+    mask: np.ndarray | None = None,
+) -> tuple[dict[str, float | int], np.ndarray]:
+    """Per-term ROC-AUC, summarised as macro (mean over terms) and micro (pooled pairs), overall and per aspect.
+
+    Terms without both a positive and a negative are skipped. `mask` excludes individual
+    protein-term pairs, e.g. proteins without truth in a term's aspect or annotations already
+    known in the partial-knowledge setting.
+    """
+    if targets.shape != scores.shape or targets.shape[1] != len(aspects):
+        raise ValueError("Targets, scores, and aspects have incompatible shapes")
+    mask = np.ones(targets.shape, dtype=bool) if mask is None else mask.astype(bool, copy=False)
+    per_term = np.full(targets.shape[1], np.nan)
+    for index in range(targets.shape[1]):
+        rows = mask[:, index]
+        term_targets = targets[rows, index]
+        positives = int(term_targets.sum())
+        if 0 < positives < len(term_targets):
+            per_term[index] = roc_auc_score(term_targets, scores[rows, index])
+
+    summary: dict[str, float | int] = {}
+    for suffix, columns in (("", np.ones(len(aspects), dtype=bool)), *((f"_{a}", aspects == a) for a in ("P", "F", "C"))):
+        term_aucs = per_term[columns]
+        term_aucs = term_aucs[np.isfinite(term_aucs)]
+        summary[f"macro_roc_auc{suffix}"] = float(term_aucs.mean()) if len(term_aucs) else float("nan")
+        summary[f"n_terms_with_roc_auc{suffix}"] = len(term_aucs)
+        pair_mask = mask[:, columns]
+        pooled_targets = targets[:, columns][pair_mask]
+        pooled_scores = scores[:, columns][pair_mask]
+        has_both = 0 < int(pooled_targets.sum()) < len(pooled_targets)
+        summary[f"micro_roc_auc{suffix}"] = float(roc_auc_score(pooled_targets, pooled_scores)) if has_both else float("nan")
+    return summary, per_term
