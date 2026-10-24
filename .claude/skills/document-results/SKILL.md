@@ -67,6 +67,19 @@ Never type numbers by hand.
 - `summary/promoter_strata.csv`, which shows whether gains concentrate in plants, or in proteins
   with a directly linked promoter (`xref`) versus rescued or imputed ones.
 
+**Which GO terms do promoters help?** This section is also required. Answer it from
+`summary/response_terms.csv` and `summary/response_terms.png`.
+- The hypothesis is that promoters help most for "response to …" processes, which are defined by
+  inducible expression.
+- Report:
+  - the mean per-term AUC change for response terms vs other process terms, under both
+    definitions (`by_name`, `by_ontology`);
+  - the prevalence-stratified permutation p-value (the primary test; Mann-Whitney is secondary);
+  - how many seeds agree.
+- Report the with-ESM-2 and without-ESM-2 comparisons separately. A difference that appears
+  only without ESM-2 means the signal is real but redundant with the protein embedding.
+- Name a few of the most-helped response terms from `summary/response_term_deltas.csv`.
+
 **Internal vs official.** Say where the internal 20% holdout and the official CAFA evaluation
 disagree, and which metric each conclusion rests on. `f_w` and `f_micro_w` can rank models
 differently.

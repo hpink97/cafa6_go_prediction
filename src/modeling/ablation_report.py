@@ -6,6 +6,8 @@ Writes to `results/`:
     summary/deltas.csv           paired (same-seed) differences for each feature-group comparison
     summary/promoter_strata.csv  promoter effect by promoter provenance and kingdom
     summary/cafaeval.csv         official CAFA evaluator scores, for runs where it was run
+    summary/response_terms.csv   do promoters help "response to" GO terms more? (see modeling.term_groups)
+    summary/response_term_deltas.csv  per-term AUC change from adding promoters
     summary/*.png                metric_by_config, delta_heatmap, promoter_strata
     <config>/                    config.json, metrics.csv, per_term_auc.csv, training_curves.png, pr_curves.png
 """
@@ -27,6 +29,7 @@ from matplotlib.colors import LinearSegmentedColormap
 
 from modeling.ablation import COMMON_TRAIN_FLAGS, COMPARISONS, CONFIGS, collect_run
 from modeling.go_evaluation import GeneOntology, build_truth_ia_totals, cafa_fmax, load_ia_weights
+from modeling.term_groups import response_term_analysis
 
 LOGGER = logging.getLogger("cafa6.modeling.ablation_report")
 HEADLINE_METRICS = {
@@ -59,7 +62,7 @@ DIVERGING = LinearSegmentedColormap.from_list("delta", ["#e34948", "#f0efec", "#
 def _git_revision() -> str:
     try:
         sha = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
-        dirty = subprocess.run(["git", "status", "--porcelain", "--", "src"], capture_output=True, text=True, check=True).stdout.strip()
+        dirty = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no", "--", "src"], capture_output=True, text=True, check=True).stdout.strip()
         return f"{sha}{'-dirty' if dirty else ''}"
     except (OSError, subprocess.CalledProcessError):
         return "unknown"
@@ -281,6 +284,30 @@ def plot_promoter_strata(strata: pd.DataFrame, path: Path) -> None:
     _save(figure, path)
 
 
+def plot_response_terms(per_term: pd.DataFrame, stats: pd.DataFrame, path: Path) -> None:
+    """ECDF of per-term AUC change from adding promoters: response terms vs other process terms."""
+    comparisons = list(dict.fromkeys(per_term["comparison"]))
+    figure, axes = _figure(1, len(comparisons), figsize=(6 * len(comparisons), 3.8), sharey=True)
+    for ax, comparison in zip(axes[0], comparisons):
+        _style(ax)
+        ax.grid(axis="y", color=GRID, linewidth=0.8)
+        ax.axvline(0, color=TEXT_MUTED, linewidth=1)
+        terms = per_term[per_term["comparison"] == comparison]
+        for color, label, selected in ((SERIES[1], "response to ... terms", terms["by_name"]), (SERIES[0], "other process terms", ~terms["by_name"])):
+            values = np.sort(terms.loc[selected, "delta"].to_numpy())
+            ax.step(values, np.arange(1, len(values) + 1) / len(values), where="post", color=color, linewidth=2, label=f"{label} (n={len(values)})")
+        row = stats[(stats["comparison"] == comparison) & (stats["definition"] == "by_name")].iloc[0]
+        ax.set_title(
+            f"Adding {comparison}\nmean Δ response {row['mean_delta_response']:+.4f} vs other {row['mean_delta_other']:+.4f} "
+            f"(p = {row['p_permutation_prevalence_stratified']:.3g})",
+            fontsize=10, color=TEXT, loc="left",
+        )
+        ax.set_xlabel("Change in held-out ROC-AUC per GO term (mean over seeds)", fontsize=9, color=TEXT_MUTED)
+        ax.legend(frameon=False, fontsize=8, loc="lower right")
+    axes[0][0].set_ylabel("Share of terms", fontsize=9, color=TEXT_MUTED)
+    _save(figure, path)
+
+
 def plot_training_curves(run_dirs: list[Path], path: Path) -> None:
     figure, axes = _figure(1, 2, figsize=(10, 3.4))
     for index, directory in enumerate(run_dirs):
@@ -363,6 +390,13 @@ def write_report(sweep_dir: Path, out_dir: Path, release_dir: Path) -> None:
     if not strata.empty:
         strata.round(6).to_csv(summary_dir / "promoter_strata.csv", index=False)
         plot_promoter_strata(strata, summary_dir / "promoter_strata.png")
+    obo_path = json.loads(next(sweep_dir.glob("*/seed*/model/run_config.json")).read_text()).get("go_obo_path")
+    if obo_path and Path(obo_path).exists():
+        response_stats, response_terms = response_term_analysis(sweep_dir, runs, obo_path)
+        if not response_stats.empty:
+            response_stats.round(6).to_csv(summary_dir / "response_terms.csv", index=False)
+            response_terms.round(5).to_csv(summary_dir / "response_term_deltas.csv", index=False)
+            plot_response_terms(response_terms, response_stats, summary_dir / "response_terms.png")
     for name in runs["config"].unique():
         write_config_dir(sweep_dir, runs, name, out_dir, revision)
     LOGGER.info("wrote report for %d runs (%s) to %s", len(runs), revision, out_dir)

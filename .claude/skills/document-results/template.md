@@ -41,6 +41,13 @@
 
 ![Promoter effect by stratum](summary/promoter_strata.png)
 
+### Are promoters most useful for "response to" terms?
+
+<!-- Hypothesis, test (per-term AUC change, prevalence-stratified permutation), both definitions,
+with vs without ESM-2, verdict, a few example terms. -->
+
+![Per-term promoter effect, response vs other process terms](summary/response_terms.png)
+
 ## Internal vs official evaluation
 
 <!-- Where the two disagree, and which metric each conclusion depends on. -->
