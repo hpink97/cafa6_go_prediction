@@ -6,7 +6,7 @@ __pycache__/
 
 # All data, features, models and predictions live under data/ and are rebuilt
 # with scripts/data/. Nothing in data/ is committed (size + Kaggle data terms).
-data/
+/data/
 
 # Large or binary artifacts, wherever they end up.
 *.zip
