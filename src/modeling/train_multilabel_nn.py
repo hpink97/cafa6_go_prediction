@@ -27,6 +27,7 @@ from torch.utils.data import DataLoader, TensorDataset
 from modeling.data import (
     build_feature_table,
     load_embedding_table,
+    load_protein_feature_table,
     load_term_counts,
     make_train_test_split,
     select_top_terms,
@@ -39,6 +40,7 @@ from modeling.go_evaluation import (
     cafa_fmax,
     limit_top_predictions,
     load_ia_weights,
+    roc_auc_summary,
 )
 from modeling.score_channels import (
     blend_scores_by_aspect,
@@ -330,7 +332,9 @@ def _classification_metrics(
     targets: np.ndarray,
     probabilities: np.ndarray,
     terms: list[str],
+    aspects: np.ndarray | None = None,
 ) -> tuple[dict[str, float | int], pd.DataFrame]:
+    """Per-term ROC-AUC/AP with macro means; given `aspects`, also per-aspect and micro ROC-AUC."""
     rows = []
     for index, term in enumerate(terms):
         term_targets = targets[:, index]
@@ -360,6 +364,8 @@ def _classification_metrics(
         "n_terms_with_roc_auc": len(valid_auc),
         "n_terms_with_average_precision": len(valid_ap),
     }
+    if aspects is not None:
+        summary.update(roc_auc_summary(targets, probabilities, aspects)[0])
     return summary, per_term
 
 
@@ -488,8 +494,8 @@ def _save_predictions(
 
 
 def run(
-    embeddings_dir: Path,
-    protein_features_path: Path,
+    embeddings_dir: Path | None,
+    protein_features_path: Path | None,
     train_terms_path: Path,
     go_obo_path: Path,
     ia_path: Path,
@@ -566,7 +572,14 @@ def run(
         if promoter_agront_dir is not None:
             promoter_embedding_dirs["promoter_agront"] = promoter_agront_dir
 
-    all_protein_ids = load_embedding_table(embeddings_dir)["protein_id"]
+    if embeddings_dir is not None:
+        all_protein_ids = load_embedding_table(embeddings_dir)["protein_id"]
+    elif protein_features_path is not None:
+        all_protein_ids = load_protein_feature_table(protein_features_path)["protein_id"]
+    else:
+        raise ValueError("At least one of ESM-2 embeddings or protein features is required")
+    if use_knn and embeddings_dir is None:
+        raise ValueError("The cosine-KNN channel needs ESM-2 embeddings; pass --no-knn with --no-esm2-features")
     taxonomy_by_id = load_taxonomy_map(train_taxonomy_path)
     outer_train_ids, test_ids = make_train_test_split(
         pd.Index(all_protein_ids),
@@ -588,17 +601,19 @@ def run(
             shuffle=True,
         )
 
+    # Without ESM-2 there are no neighbours to impute promoters from; they are zero-filled instead.
+    imputes_promoters = bool(promoter_embedding_dirs) and embeddings_dir is not None
     LOGGER.info("loading merged feature table")
     features = build_feature_table(
         embeddings_dir,
         protein_features_path,
         taxonomy_features_path,
         promoter_embedding_dirs=promoter_embedding_dirs,
-        promoter_feature_cache_path=promoter_feature_cache if promoter_embedding_dirs else None,
+        promoter_feature_cache_path=promoter_feature_cache if imputes_promoters else None,
         promoter_knn_k=promoter_knn_k,
-        promoter_train_ids=outer_train_ids.tolist() if promoter_embedding_dirs else None,
-        promoter_imputer_path=inference_dir / "promoter_imputer.npz" if promoter_embedding_dirs else None,
-        promoter_imputer_donor_ids=all_protein_ids.tolist() if promoter_embedding_dirs else None,
+        promoter_train_ids=outer_train_ids.tolist() if imputes_promoters else None,
+        promoter_imputer_path=inference_dir / "promoter_imputer.npz" if imputes_promoters else None,
+        promoter_imputer_donor_ids=all_protein_ids.tolist() if imputes_promoters else None,
     )
     term_counts = load_term_counts(train_terms_path)
     base_terms = select_top_terms(term_counts, top_n=top_n)
@@ -883,12 +898,14 @@ def run(
             test_targets,
             propagated_test_probabilities,
             terms,
+            aspects,
         )
         test_nn_summary.update(test_nn_cafa)
     validation_nn_summary, validation_nn_per_term = _classification_metrics(
         validation_targets,
         propagated_validation_probabilities,
         terms,
+        aspects,
     )
     validation_nn_summary.update(validation_nn_cafa)
 
@@ -1043,6 +1060,7 @@ def run(
             test_targets,
             propagated_test_ensemble,
             terms,
+            aspects,
         )
         test_summary.update(test_cafa)
         test_prediction_extras.update(
@@ -1055,6 +1073,7 @@ def run(
         validation_targets,
         propagated_validation_ensemble,
         terms,
+        aspects,
     )
     validation_summary.update(validation_cafa)
     validation_prediction_extras.update(
@@ -1142,7 +1161,7 @@ def run(
     (output_dir / "ensemble_config.json").write_text(json.dumps(ensemble_config, indent=2) + "\n")
 
     config = {
-        "embeddings_dir": str(embeddings_dir),
+        "embeddings_dir": str(embeddings_dir) if embeddings_dir else None,
         "protein_features_path": str(protein_features_path) if protein_features_path else None,
         "taxonomy_features_path": str(taxonomy_features_path) if taxonomy_features_path else None,
         "promoter_nt_dir": str(promoter_nt_dir) if promoter_nt_dir else None,
@@ -1220,6 +1239,30 @@ def run(
         f"{test_summary['cafa_fmax_mean']:.5f}" if has_test else "n/a",
         f"{test_nn_summary['cafa_fmax_mean']:.5f}" if has_test else "n/a",
     )
+
+
+def resolve_feature_inputs(paths: dict[str, Path], disabled: set[str]) -> dict[str, Path | None]:
+    """Input path per feature block, or None when disabled.
+
+    A block that is enabled but missing on disk is an error rather than being silently dropped, so
+    an ablation can never quietly train a different feature set than the one it names.
+    """
+    embedding_blocks = {"esm2", "promoter_nt", "promoter_agront"}
+    resolved: dict[str, Path | None] = {}
+    for block, path in paths.items():
+        if block in disabled:
+            resolved[block] = None
+            continue
+        marker = path / "metadata.json" if block in embedding_blocks else path
+        if not marker.exists():
+            flag = f"--no-{block.replace('_', '-')}-features"
+            raise FileNotFoundError(f"{block} features not found at {marker}; build them or pass {flag}")
+        resolved[block] = path
+    if not any(resolved.get(block) for block in ("esm2", "protein")):
+        raise ValueError("Keep at least one of the ESM-2 or protein feature blocks; they define the protein set")
+    if resolved.get("promoter_agront") and resolved.get("esm2") and not resolved.get("taxonomy"):
+        raise ValueError("AgroNT promoter imputation needs taxonomy features to identify plants; drop --no-taxonomy-features")
+    return resolved
 
 
 def main() -> None:
@@ -1310,8 +1353,11 @@ def main() -> None:
     parser.add_argument("--max-validation-samples", type=int, default=None, help="Debug: cap validation rows after splitting")
     parser.add_argument("--max-test-samples", type=int, default=None, help="Debug: cap test rows after splitting")
     parser.add_argument("--no-save-predictions", action="store_true")
+    parser.add_argument("--no-esm2-features", action="store_true", help="Ablation: drop ESM-2 (requires --no-knn; promoters are zero-filled)")
     parser.add_argument("--no-protein-features", action="store_true", help="Ablation: drop the sequence-derived protein features")
     parser.add_argument("--no-taxonomy-features", action="store_true", help="Ablation: drop the taxonomy one-hot features")
+    parser.add_argument("--no-promoter-nt-features", action="store_true", help="Ablation: drop the NT promoter embeddings")
+    parser.add_argument("--no-promoter-agront-features", action="store_true", help="Ablation: drop the AgroNT promoter embeddings")
     parser.add_argument("--no-promoter-features", action="store_true", help="Ablation: drop the NT and AgroNT promoter embeddings")
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--log-level", default="INFO", choices=("DEBUG", "INFO", "WARNING"))
@@ -1327,38 +1373,38 @@ def main() -> None:
         datefmt="%H:%M:%S",
     )
 
-    taxonomy_features_path = arguments.pop("taxonomy_features")
     arguments["loss_name"] = arguments.pop("loss")
     arguments["device_name"] = arguments.pop("device")
-    use_protein_features = not arguments.pop("no_protein_features")
-    use_taxonomy_features = not arguments.pop("no_taxonomy_features")
-    use_promoter_features = not arguments.pop("no_promoter_features")
-    if not use_taxonomy_features:
-        taxonomy_features_path = None
-    elif not taxonomy_features_path.exists():
-        LOGGER.warning("taxonomy features not found at %s; proceeding without them", taxonomy_features_path)
-        taxonomy_features_path = None
-    promoter_nt_dir = arguments.pop("promoter_nt_dir")
-    if not use_promoter_features:
-        promoter_nt_dir = None
-    elif not (promoter_nt_dir / "metadata.json").exists():
-        LOGGER.warning("promoter NT embeddings not found at %s; proceeding without them", promoter_nt_dir)
-        promoter_nt_dir = None
-    promoter_agront_dir = arguments.pop("promoter_agront_dir")
-    if not use_promoter_features:
-        promoter_agront_dir = None
-    elif not (promoter_agront_dir / "metadata.json").exists():
-        LOGGER.warning("promoter AgroNT embeddings not found at %s; proceeding without them", promoter_agront_dir)
-        promoter_agront_dir = None
-    if promoter_agront_dir is not None and taxonomy_features_path is None:
-        parser.error("AgroNT promoter imputation needs taxonomy features to identify plants; drop --no-taxonomy-features")
-    protein_features_path = arguments.pop("protein_features")
+    no_promoters = arguments.pop("no_promoter_features")
+    disabled = {
+        block
+        for block, flag in (
+            ("esm2", arguments.pop("no_esm2_features")),
+            ("protein", arguments.pop("no_protein_features")),
+            ("taxonomy", arguments.pop("no_taxonomy_features")),
+            ("promoter_nt", arguments.pop("no_promoter_nt_features") or no_promoters),
+            ("promoter_agront", arguments.pop("no_promoter_agront_features") or no_promoters),
+        )
+        if flag
+    }
+    paths = {
+        "esm2": arguments.pop("embeddings_dir"),
+        "protein": arguments.pop("protein_features"),
+        "taxonomy": arguments.pop("taxonomy_features"),
+        "promoter_nt": arguments.pop("promoter_nt_dir"),
+        "promoter_agront": arguments.pop("promoter_agront_dir"),
+    }
+    try:
+        inputs = resolve_feature_inputs(paths, disabled)
+    except (FileNotFoundError, ValueError) as error:
+        parser.error(str(error))
     run(
-        protein_features_path=protein_features_path if use_protein_features else None,
+        embeddings_dir=inputs["esm2"],
+        protein_features_path=inputs["protein"],
         train_terms_path=arguments.pop("train_terms"),
-        taxonomy_features_path=taxonomy_features_path,
-        promoter_nt_dir=promoter_nt_dir,
-        promoter_agront_dir=promoter_agront_dir,
+        taxonomy_features_path=inputs["taxonomy"],
+        promoter_nt_dir=inputs["promoter_nt"],
+        promoter_agront_dir=inputs["promoter_agront"],
         **arguments,
     )
 

@@ -113,9 +113,16 @@ def run(
     model.load_state_dict(checkpoint["model_state_dict"])
     model.to(device).eval()
 
-    esm2 = EmbeddingRows(embeddings_dir)
-    esm2_positions = feature_positions(feature_names, f"esm2_{esm2.dim}", esm2.dim)
-    protein_ids = esm2.ids[:limit] if limit is not None else esm2.ids
+    # Checkpoints trained without ESM-2 take their protein set from the protein features and
+    # zero-fill missing promoters, mirroring training.
+    uses_esm2 = any(name.startswith("esm2_") for name in feature_names)
+    if uses_esm2:
+        esm2 = EmbeddingRows(embeddings_dir)
+        esm2_positions = feature_positions(feature_names, f"esm2_{esm2.dim}", esm2.dim)
+        protein_ids = esm2.ids
+    else:
+        protein_ids = load_protein_feature_table(protein_features_path)["protein_id"].astype(str).tolist()
+    protein_ids = protein_ids[:limit] if limit is not None else protein_ids
     if protein_ids_paths:
         wanted = set().union(
             *(set(pd.read_csv(path, sep="\t", header=None, usecols=[0], dtype=str)[0]) for path in protein_ids_paths)
@@ -155,7 +162,8 @@ def run(
             raise ValueError(f"Checkpoint uses {prefix} features; pass its test embedding directory")
         source = EmbeddingRows(promoter_dirs[prefix])
         promoter_sources[prefix] = (source, feature_positions(feature_names, prefix, source.dim))
-        imputer = imputer or PromoterImputer.load(model_dir / "inference" / "promoter_imputer.npz")
+        if uses_esm2:
+            imputer = imputer or PromoterImputer.load(model_dir / "inference" / "promoter_imputer.npz")
     agront_positions = promoter_sources[PLANT_SPECIFIC_PROMOTER_PREFIX][1] if PLANT_SPECIFIC_PROMOTER_PREFIX in promoter_sources else None
 
     taxon_prior = None
@@ -177,16 +185,17 @@ def run(
     with partial_path.open("w") as handle:
         for start in range(0, len(protein_ids), batch_size):
             batch_ids = protein_ids[start : start + batch_size]
-            esm2_values, esm2_known = esm2.lookup(batch_ids)
-            if not esm2_known.all():
-                raise ValueError("Every test protein must have an ESM-2 embedding")
             x = np.empty((len(batch_ids), len(feature_names)), dtype=np.float32)
-            x[:, esm2_positions] = esm2_values
+            if uses_esm2:
+                esm2_values, esm2_known = esm2.lookup(batch_ids)
+                if not esm2_known.all():
+                    raise ValueError("Every test protein must have an ESM-2 embedding")
+                x[:, esm2_positions] = esm2_values
             x[:, static_positions] = static.iloc[start : start + len(batch_ids)].to_numpy(dtype=np.float32)
             is_plant = np.asarray([is_plant_by_protein.get(protein_id, False) for protein_id in batch_ids], dtype=bool)
             for prefix, (source, positions) in promoter_sources.items():
                 values, known = source.lookup(batch_ids)
-                if (~known).any():
+                if imputer is not None and (~known).any():
                     values[~known] = imputer.impute(prefix, esm2_values[~known], is_plant[~known])
                 x[:, positions] = values
 
