@@ -1,0 +1,28 @@
+{
+  "config": "all",
+  "feature_groups": [
+    "esm2",
+    "protein",
+    "taxonomy",
+    "promoter_nt",
+    "promoter_agront"
+  ],
+  "question": "value of promoters (NT + AgroNT)",
+  "trainer_flags": [
+    "--no-knn",
+    "--no-taxon-prior",
+    "--checkpoint-taxon-weight",
+    "0",
+    "--test-size",
+    "0.2",
+    "--epochs",
+    "100",
+    "--overwrite"
+  ],
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "git_revision": "2c147c8-dirty"
+}

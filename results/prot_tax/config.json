@@ -1,0 +1,27 @@
+{
+  "config": "prot_tax",
+  "feature_groups": [
+    "protein",
+    "taxonomy"
+  ],
+  "question": "floor without a protein language model",
+  "trainer_flags": [
+    "--no-knn",
+    "--no-taxon-prior",
+    "--checkpoint-taxon-weight",
+    "0",
+    "--test-size",
+    "0.2",
+    "--epochs",
+    "100",
+    "--overwrite",
+    "--no-esm2-features",
+    "--no-promoter-features"
+  ],
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "git_revision": "2c147c8-dirty"
+}

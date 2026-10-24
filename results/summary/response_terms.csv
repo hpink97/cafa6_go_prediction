@@ -1,0 +1,5 @@
+comparison,definition,n_response_terms,n_other_process_terms,mean_delta_response,mean_delta_other,median_delta_response,median_delta_other,share_improved_response,share_improved_other,difference_in_means,p_permutation_prevalence_stratified,p_mann_whitney,n_seeds_response_larger,n_seeds
+promoters with ESM-2,by_name,164,1299,0.011525,0.008544,0.009894,0.004623,0.743902,0.722864,0.002981,0.019298,0.013129,2,3
+promoters with ESM-2,by_ontology,253,1210,0.009465,0.008755,0.00753,0.004597,0.73913,0.722314,0.00071,0.527247,0.152419,2,3
+promoters without ESM-2,by_name,164,1299,0.0313,0.015266,0.026604,0.009616,0.884146,0.692841,0.016034,0.0001,0.0,3,3
+promoters without ESM-2,by_ontology,253,1210,0.024257,0.015559,0.015415,0.009848,0.766798,0.703306,0.008698,0.0006,0.00044,3,3

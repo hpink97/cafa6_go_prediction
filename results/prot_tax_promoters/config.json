@@ -1,0 +1,28 @@
+{
+  "config": "prot_tax_promoters",
+  "feature_groups": [
+    "protein",
+    "taxonomy",
+    "promoter_nt",
+    "promoter_agront"
+  ],
+  "question": "do promoters carry signal without ESM-2",
+  "trainer_flags": [
+    "--no-knn",
+    "--no-taxon-prior",
+    "--checkpoint-taxon-weight",
+    "0",
+    "--test-size",
+    "0.2",
+    "--epochs",
+    "100",
+    "--overwrite",
+    "--no-esm2-features"
+  ],
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "git_revision": "2c147c8-dirty"
+}

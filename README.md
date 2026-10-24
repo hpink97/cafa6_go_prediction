@@ -8,7 +8,25 @@ ablation measures what each feature group adds, scored with ROC-AUC and the offi
 evaluator.
 
 <!-- results:start -->
-*Results pending: the feature-group ablation is running. See [results/](results/).*
+**Results** (6 feature configurations × 3 seeds, paired):
+- **ESM-2 carries most of the signal.** Kingdom features add a small, consistent gain; handcrafted
+  features do not transfer to the official CAFA6 truth.
+- **Promoter embeddings consistently improve per-term ranking (macro ROC-AUC)**, internally and
+  officially, but not CAFA Fmax.
+- **Promoters help "response to …" terms most:** twice the gain of other processes without ESM-2
+  (p = 0.0001). With ESM-2 that extra benefit largely disappears.
+
+| Config | Feature groups | Internal macro AUC | Official macro AUC |
+|---|---|---|---|
+| `esm2` | ESM-2 | 0.887 ± 0.002 | 0.838 ± 0.003 |
+| `esm2_prot` | + handcrafted | 0.889 ± 0.002 | 0.834 ± 0.004 |
+| `esm2_prot_tax` | + kingdom | 0.898 ± 0.001 | 0.844 ± 0.006 |
+| `all` | + promoters | **0.906 ± 0.003** | **0.850 ± 0.002** |
+| `prot_tax` | handcrafted + kingdom only | 0.829 ± 0.006 | 0.794 ± 0.007 |
+| `prot_tax_promoters` | + promoters, no ESM-2 | 0.843 ± 0.001 | 0.799 ± 0.005 |
+
+Official CAFA evaluator: see [results/README.md](results/README.md#official-cafa-scores).
+Full analysis, figures and per-config outputs are in [results/](results/README.md).
 <!-- results:end -->
 
 ## Approach
