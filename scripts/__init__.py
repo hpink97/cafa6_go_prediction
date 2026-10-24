@@ -1,0 +1,1 @@
+"""Command-line data preparation scripts for CAFA6."""

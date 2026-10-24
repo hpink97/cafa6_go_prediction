@@ -1,0 +1,24 @@
+.venv/
+__pycache__/
+*.py[cod]
+.DS_Store
+.pytest_cache/
+
+# All data, features, models and predictions live under data/ and are rebuilt
+# with scripts/data/. Nothing in data/ is committed (size + Kaggle data terms).
+data/
+
+# Large or binary artifacts, wherever they end up.
+*.zip
+*.parquet
+*.pt
+*.ckpt
+*.npz
+*.dat
+*.fasta
+*.fa
+*.fa.gz
+*.dmnd
+
+# Local Claude Code settings (the shared skills under .claude/skills are tracked).
+.claude/settings.local.json
