@@ -226,7 +226,7 @@ def load_taxonomy_feature_table(path: str | Path) -> pd.DataFrame:
 
 
 def build_feature_table(
-    embedding_dir: str | Path,
+    embedding_dir: str | Path | None,
     protein_features_path: str | Path | None,
     taxonomy_features_path: str | Path | None = None,
     promoter_embedding_dirs: dict[str, str | Path] | None = None,
@@ -236,20 +236,35 @@ def build_feature_table(
     promoter_imputer_path: str | Path | None = None,
     promoter_imputer_donor_ids: list[str] | None = None,
 ) -> pd.DataFrame:
-    """Merge embeddings, protein features, and (optionally) taxonomy/promoter features on protein_id."""
-    embeddings = load_embedding_table(embedding_dir)
-    merged = embeddings
-    if protein_features_path is not None:
-        protein_features = load_protein_feature_table(protein_features_path)
-        merged = embeddings.merge(protein_features, on="protein_id", how="inner", validate="one_to_one")
-        if len(merged) < min(len(embeddings), len(protein_features)):
-            raise ValueError("Feature merge dropped proteins; embeddings and protein feature tables disagree on protein_id coverage")
+    """Merge embeddings, protein features, and (optionally) taxonomy/promoter features on protein_id.
+
+    With `embedding_dir=None` (no ESM-2 block) the protein features define the protein set, and
+    missing promoters are zero-filled: imputing them from ESM-2 neighbours would leak ESM-2 back in.
+    """
+    if embedding_dir is None:
+        if protein_features_path is None:
+            raise ValueError("Without ESM-2 embeddings, protein features are required to define the protein set")
+        merged = load_protein_feature_table(protein_features_path)
+    else:
+        embeddings = load_embedding_table(embedding_dir)
+        merged = embeddings
+        if protein_features_path is not None:
+            protein_features = load_protein_feature_table(protein_features_path)
+            merged = embeddings.merge(protein_features, on="protein_id", how="inner", validate="one_to_one")
+            if len(merged) < min(len(embeddings), len(protein_features)):
+                raise ValueError("Feature merge dropped proteins; embeddings and protein feature tables disagree on protein_id coverage")
     if taxonomy_features_path is not None:
         taxonomy_features = load_taxonomy_feature_table(taxonomy_features_path)
         merged = merged.merge(taxonomy_features, on="protein_id", how="left", validate="one_to_one")
         taxon_columns = [column for column in taxonomy_features.columns if column != "protein_id"]
         merged[taxon_columns] = merged[taxon_columns].fillna(0.0)
-    if promoter_embedding_dirs is not None:
+    if promoter_embedding_dirs is not None and embedding_dir is None:
+        for prefix, promoter_dir in promoter_embedding_dirs.items():
+            promoter_features = load_promoter_embedding_table(promoter_dir, prefix)
+            merged = merged.merge(promoter_features, on="protein_id", how="left", validate="one_to_one")
+            promoter_columns = [column for column in promoter_features.columns if column != "protein_id"]
+            merged[promoter_columns] = merged[promoter_columns].fillna(0.0)
+    elif promoter_embedding_dirs is not None:
         if promoter_feature_cache_path is None:
             raise ValueError("promoter_feature_cache_path is required when promoter_embedding_dirs is set")
         if promoter_train_ids is None:
