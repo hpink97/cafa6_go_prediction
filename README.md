@@ -8,25 +8,34 @@ ablation measures what each feature group adds, scored with ROC-AUC and the offi
 evaluator.
 
 <!-- results:start -->
-**Results** (6 feature configurations × 3 seeds, paired):
-- **ESM-2 carries most of the signal.** Kingdom features add a small, consistent gain; handcrafted
-  features do not transfer to the official CAFA6 truth.
-- **Promoter embeddings consistently improve per-term ranking (macro ROC-AUC)**, internally and
-  officially, but not CAFA Fmax.
-- **Promoters help "response to …" terms most:** twice the gain of other processes without ESM-2
-  (p = 0.0001). With ESM-2 that extra benefit largely disappears.
+**Results:** 6 feature configurations and 24 architectures, 3 seeds each, scored on a held-out
+split and with the official CAFA evaluator on the CAFA6 final release.
 
-| Config | Feature groups | Internal macro AUC | Official macro AUC |
-|---|---|---|---|
-| `esm2` | ESM-2 | 0.887 ± 0.002 | 0.838 ± 0.003 |
-| `esm2_prot` | + handcrafted | 0.889 ± 0.002 | 0.834 ± 0.004 |
-| `esm2_prot_tax` | + kingdom | 0.898 ± 0.001 | 0.844 ± 0.006 |
-| `all` | + promoters | **0.906 ± 0.003** | **0.850 ± 0.002** |
-| `prot_tax` | handcrafted + kingdom only | 0.829 ± 0.006 | 0.794 ± 0.007 |
-| `prot_tax_promoters` | + promoters, no ESM-2 | 0.843 ± 0.001 | 0.799 ± 0.005 |
+- **ESM-2 carries the signal.** It adds +0.065 official weighted Fmax (p < 0.001). Handcrafted
+  and kingdom features improve ranking (AUC), but not the official CAFA score.
+- **Promoter DNA embeddings improve per-term ranking but hurt the official score.**
+  - Macro ROC-AUC rises on every seed.
+  - On the prospective CAFA6 targets, the promoter model is significantly *worse* than every
+    ESM-2 model without promoters: −0.010 to −0.014 weighted Fmax, p ≤ 0.006, paired protein
+    bootstrap.
+  - Promoter coverage is much patchier on those targets than in training.
+- **Promoters help "response to …" terms most,** as hypothesised: twice the gain of other
+  processes without ESM-2 (p = 0.0001). With ESM-2 that extra benefit largely disappears.
+- **A random holdout picks the wrong model.** Internally the promoter model looks best, and
+  officially it ranks last of the ESM-2 models.
 
-Official CAFA evaluator: see [results/README.md](results/README.md#official-cafa-scores).
-Full analysis, figures and per-config outputs are in [results/](results/README.md).
+| Model | Features | Official weighted Fmax | Official macro AUC | Internal Fmax |
+|---|---|---|---|---|
+| default architecture | ESM-2 | 0.319 ± 0.006 | 0.838 ± 0.003 | 0.451 ± 0.002 |
+| default architecture | ESM-2 + handcrafted + kingdom | 0.321 ± 0.003 | 0.844 ± 0.006 | 0.457 ± 0.002 |
+| default architecture | + promoters | 0.313 ± 0.002 | **0.850 ± 0.002** | 0.457 ± 0.001 |
+| wider architecture (search) | + promoters | 0.321 ± 0.004 | **0.850 ± 0.008** | **0.467 ± 0.004** |
+| **wider architecture (search)** | **ESM-2 + handcrafted + kingdom** | **0.326 ± 0.008** | 0.844 ± 0.003 | 0.464 ± 0.002 |
+
+The last row is the best model on the official evaluation. In the protein bootstrap it beats rows
+2–4 (the other architecture × promoter combinations) on weighted Fmax (p = 0.001–0.042).
+- **Feature ablation, significance and the promoter analyses:** [results/](results/README.md).
+- **Architecture search and the final comparison:** [results/hparam-search/](results/hparam-search/README.md).
 <!-- results:end -->
 
 ## Approach

@@ -1,0 +1,11 @@
+reference,other,metric,delta,ci_low,ci_high,p_bootstrap,n_seeds,n_bootstrap
+all,esm2,internal_fmax,0.006123,0.004877,0.007288,0.001,3,1000
+all,esm2_prot,internal_fmax,0.004426,0.003223,0.005735,0.001,3,1000
+all,esm2_prot_tax,internal_fmax,-0.000747,-0.00177,0.000609,0.326,3,1000
+all,prot_tax,internal_fmax,0.065847,0.064123,0.067593,0.001,3,1000
+all,prot_tax_promoters,internal_fmax,0.067531,0.065866,0.069262,0.001,3,1000
+all,esm2,official_f_w_nk_lk,-0.010285,-0.017681,-0.003669,0.002,3,1000
+all,esm2_prot,official_f_w_nk_lk,-0.009861,-0.017574,-0.003421,0.006,3,1000
+all,esm2_prot_tax,official_f_w_nk_lk,-0.013684,-0.020607,-0.006603,0.001,3,1000
+all,prot_tax,official_f_w_nk_lk,0.06918,0.059462,0.078736,0.001,3,1000
+all,prot_tax_promoters,official_f_w_nk_lk,0.076187,0.067898,0.085365,0.001,3,1000

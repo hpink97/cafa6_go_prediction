@@ -1,16 +1,27 @@
 # Which feature groups help CAFA6 GO-term prediction?
 
-**ESM-2 does nearly all the work. Kingdom features add a small, consistent gain; handcrafted
-sequence features do not.** It adds about 0.07 internal macro ROC-AUC and 0.05 official macro
-ROC-AUC over handcrafted and kingdom features alone.
+**ESM-2 does nearly all the work.** It adds +0.065 official weighted Fmax (p < 0.001) over
+handcrafted and kingdom features alone. Nothing else comes close.
 
-**Promoter DNA embeddings improve per-term ranking (macro ROC-AUC) on every seed**, both on held-out
-proteins and on the official CAFA6 ground truth, but they do not move IA-weighted Fmax.
+**Promoters improve ranking but hurt the official CAFA score.**
+- Promoter DNA embeddings raise per-term ranking (macro ROC-AUC) on every seed, internally and
+  against the CAFA6 truth.
+- On the official CAFA evaluator, adding them *lowers* weighted Fmax. In the protein bootstrap,
+  the promoter model (`all`) is significantly worse than every ESM-2 model without promoters,
+  by 0.010–0.014 weighted Fmax (p ≤ 0.006).
+- **So `all`, the best model by AUC, is not the best model.** By the official metric the best are
+  the three ESM-2 models without promoters, which are within seed noise of each other. They
+  weren't tested against each other pairwise.
 
-**As hypothesised, the promoter gain is largest for "response to …" processes.** Without ESM-2
-they gain twice as much as other process terms (p = 0.0001). With ESM-2 the extra benefit is weak,
-and it depends on how response terms are defined. Promoters carry real expression-linked signal,
-but the protein language model already captures most of it.
+**As hypothesised, promoters help "response to …" processes most.** Without ESM-2 they gain twice
+as much as other process terms (p = 0.0001). With ESM-2 the extra benefit is weak. Promoters carry
+real expression-linked signal, but the protein language model already captures most of it.
+
+**Internal evaluation would have chosen the wrong model.** On a random 20% holdout, promoters look
+neutral to helpful. On the prospective CAFA6 targets they hurt. The follow-up
+[architecture search](hparam-search/README.md) shows the same reversal. The best final model is a
+wider network on ESM-2 + handcrafted + kingdom features, without promoters: official weighted
+Fmax 0.326.
 
 ## Setup
 
@@ -82,34 +93,41 @@ Official macro ROC-AUC by knowledge setting:
 
 ### Paired effect of each feature group
 
-Each cell is the change from adding a group: mean ± sd over seeds, then (seeds improved / seeds).
-An effect is called **consistent** when every seed agrees on the sign and |mean| > sd; anything
-else is **inconclusive**.
+Each cell is the mean paired change from adding a group, then the paired t-test p-value across
+seeds and (seeds improved / seeds). The comparisons are defined in
+[`summary/deltas.csv`](summary/deltas.csv), which also holds the sd of each change. Official f_w
+and f_micro_w come from the CAFA evaluator and average NK, LK and PK.
 
-| Comparison                   | Configs                           | Internal macro AUC     | Internal Fmax          | Official macro AUC     | Official micro AUC     |
-|:-----------------------------|:----------------------------------|:-----------------------|:-----------------------|:-----------------------|:-----------------------|
-| + handcrafted                | `esm2_prot` − `esm2`              | +0.0017 ± 0.0013 (3/3) | +0.0017 ± 0.0009 (3/3) | -0.0041 ± 0.0016 (0/3) | -0.0006 ± 0.0008 (0/3) |
-| + kingdom                    | `esm2_prot_tax` − `esm2_prot`     | +0.0099 ± 0.0027 (3/3) | +0.0052 ± 0.0032 (3/3) | +0.0105 ± 0.0037 (3/3) | +0.0023 ± 0.0012 (3/3) |
-| + handcrafted & kingdom      | `esm2_prot_tax` − `esm2`          | +0.0116 ± 0.0030 (3/3) | +0.0069 ± 0.0039 (3/3) | +0.0064 ± 0.0035 (3/3) | +0.0017 ± 0.0018 (3/3) |
-| + all promoters (with ESM-2) | `all` − `esm2_prot_tax`           | +0.0077 ± 0.0023 (3/3) | -0.0007 ± 0.0030 (1/3) | +0.0058 ± 0.0046 (3/3) | +0.0006 ± 0.0020 (1/3) |
-| + all promoters (no ESM-2)   | `prot_tax_promoters` − `prot_tax` | +0.0139 ± 0.0051 (3/3) | -0.0017 ± 0.0032 (1/3) | +0.0054 ± 0.0055 (2/3) | -0.0021 ± 0.0009 (0/3) |
-| + ESM-2                      | `esm2_prot_tax` − `prot_tax`      | +0.0689 ± 0.0057 (3/3) | +0.0666 ± 0.0028 (3/3) | +0.0503 ± 0.0088 (3/3) | +0.0208 ± 0.0030 (3/3) |
+With 3 seeds the t-test has 2 degrees of freedom. p < 0.05 needs a large, very consistent effect,
+and about 30 tests are shown uncorrected, so isolated p ≈ 0.02–0.05 values are weak evidence. An
+effect is called **significant** here only when p < 0.05 and every seed agrees.
+
+| Adding                       | Internal macro AUC    | Internal Fmax         | Official macro AUC    | Official f_w          | Official f_micro_w    |
+|:-----------------------------|:----------------------|:----------------------|:----------------------|:----------------------|:----------------------|
+| + handcrafted                | +0.0017 (p=0.15, 3/3) | +0.0017 (p=0.08, 3/3) | -0.0041 (p=0.05, 0/3) | +0.0002 (p=0.96, 2/3) | -0.0021 (p=0.42, 1/3) |
+| + kingdom                    | +0.0099 (p=0.02, 3/3) | +0.0052 (p=0.11, 3/3) | +0.0105 (p=0.04, 3/3) | +0.0020 (p=0.65, 2/3) | -0.0006 (p=0.75, 1/3) |
+| + handcrafted & kingdom      | +0.0116 (p=0.02, 3/3) | +0.0069 (p=0.09, 3/3) | +0.0064 (p=0.09, 3/3) | +0.0023 (p=0.54, 1/3) | -0.0027 (p=0.15, 0/3) |
+| + all promoters (with ESM-2) | +0.0077 (p=0.03, 3/3) | -0.0007 (p=0.71, 1/3) | +0.0058 (p=0.16, 3/3) | -0.0080 (p=0.10, 0/3) | -0.0109 (p=0.06, 0/3) |
+| + all promoters (no ESM-2)   | +0.0139 (p=0.04, 3/3) | -0.0017 (p=0.46, 1/3) | +0.0054 (p=0.23, 2/3) | -0.0074 (p=0.06, 0/3) | -0.0210 (p=0.02, 0/3) |
+| + ESM-2                      | +0.0689 (p=0.00, 3/3) | +0.0666 (p=0.00, 3/3) | +0.0503 (p=0.01, 3/3) | +0.0648 (p=0.00, 3/3) | +0.0531 (p=0.00, 3/3) |
 
 ![Paired deltas](summary/delta_heatmap.png)
 
-- **ESM-2 is the foundation.** It is consistent on every metric and an order of magnitude larger
+- **ESM-2 is the foundation.** It is significant on every metric and an order of magnitude larger
   than any other effect.
-- **Kingdom helps consistently**, on internal and official metrics alike. The cheapest feature
-  group is the second most useful.
-- **Handcrafted features don't transfer.** They give a small consistent internal gain but a
-  consistent *loss* on the official truth (−0.004 macro AUC, 0/3 seeds improved). Much of what
-  they encode (hydrophobicity, charge, disorder) is predictable from ESM-2 embeddings (see
-  `notebooks/embedding_vs_manual_features.ipynb`). The extra inputs seem to fit the random internal
-  split rather than the newer proteins in the CAFA6 release.
+- **Kingdom features help ranking but not the CAFA score.** They significantly raise macro AUC,
+  internally and officially, but leave official f_w and f_micro_w unchanged.
+- **Handcrafted features don't help on the official truth.** They give a small internal gain, but
+  official macro AUC falls (−0.004, 0/3 seeds) and the CAFA metrics don't move. Much of what they
+  encode (hydrophobicity, charge, disorder) is predictable from ESM-2 embeddings (see
+  `notebooks/embedding_vs_manual_features.ipynb`).
+- **Promoters lower the official CAFA metrics on every seed**, with and without ESM-2: 0/3 seeds
+  improve f_w or f_micro_w. Seed-level p ranges from 0.02 to 0.10; the
+  [protein bootstrap](#is-all-the-best-model) is clearer.
 
 ## Do promoters help?
 
-**Yes, for per-term ranking, but not for protein-level CAFA Fmax.**
+**For per-term ranking, yes. For the official CAFA score, no: they make it worse.**
 
 - **With ESM-2,** adding promoter embeddings consistently raises macro ROC-AUC:
   - internal: +0.0077 ± 0.0023, 3/3 seeds;
@@ -122,6 +140,16 @@ else is **inconclusive**.
 - **Reading:** macro AUC weights every term equally, while micro AUC and Fmax are dominated by
   common, high-information-content annotations. So promoters help rank the long tail of
   specific terms, and the protein-level metrics barely register it.
+- **On the official CAFA evaluator they cost 0.008–0.014 weighted Fmax** (see
+  [below](#is-all-the-best-model)).
+
+  A likely cause is distribution shift in the promoter features:
+  - training proteins: 3% have no promoter and need imputation, and 4% borrow one from a
+    related species;
+  - test superset: 12% and 19% respectively.
+
+  The network learns to rely on a feature that is noisier for exactly the proteins CAFA
+  evaluates.
 - **Promoter source doesn't explain much.** Splitting test proteins by how their promoter was
   obtained or by kingdom, the Fmax change is within noise for every group. The exception is
   proteins with no promoter at all, whose imputed vector slightly hurts on average (−0.013,
@@ -215,29 +243,79 @@ Every term's effect is in [`summary/response_term_deltas.csv`](summary/response_
 ## Internal vs official evaluation
 
 <a id="official-cafa-scores"></a>
-**The two agree on the big picture** (ESM-2 ≫ kingdom > promoters) **but disagree on handcrafted
-features.** Those help internally and hurt officially. The internal split is random by protein,
-so close homologues often land on both sides of it. The CAFA6 targets were annotated after
-training, so they reward features that generalise.
+**The two agree that ESM-2 dominates, but disagree on everything added to it:**
+- **handcrafted features** help internally but not officially;
+- **promoters** look neutral to helpful internally but hurt the official CAFA metrics.
 
-**Official CAFA evaluator scores.** These cover the best config by internal macro ROC-AUC
-(`all`), which was chosen on the internal holdout, not on these scores. The `esm2` baseline is
-included as a reference:
+The internal split is random by protein, so close homologues often land on both sides of it, and
+promoter coverage looks like training. The CAFA6 targets were annotated after training and have
+much patchier promoter coverage, so they reward features that generalise.
+
+**Official CAFA evaluator scores** (all configs, all seeds; mean ± sd):
 
 <!-- cafaeval-table -->
-| Config   |   Seeds |   f_w NK |   f_w LK |   f_w PK |   f_w overall |   f_micro_w NK |   f_micro_w LK |   f_micro_w PK |   f_micro_w overall |   s_w (lower better) overall |
-|:---------|--------:|---------:|---------:|---------:|--------------:|---------------:|---------------:|---------------:|--------------------:|-----------------------------:|
-| `esm2`   |       0 |    0.393 |    0.398 |    0.162 |         0.318 |          0.308 |          0.343 |           0.11 |               0.254 |                       10.825 |
+| Config               | Seeds   | f_w NK        | f_w LK        | f_w PK        | f_w overall   | f_micro_w NK   | f_micro_w LK   | f_micro_w PK   | f_micro_w overall   | s_w (lower better) overall   |
+|:---------------------|:--------|:--------------|:--------------|:--------------|:--------------|:---------------|:---------------|:---------------|:--------------------|:-----------------------------|
+| `esm2`               | 0, 1, 2 | 0.394 ± 0.009 | 0.401 ± 0.007 | 0.161 ± 0.002 | 0.319 ± 0.006 | 0.310 ± 0.007  | 0.343 ± 0.003  | 0.111 ± 0.001  | 0.255 ± 0.003       | 10.766 ± 0.061               |
+| `esm2_prot`          | 0, 1, 2 | 0.392 ± 0.011 | 0.402 ± 0.004 | 0.162 ± 0.004 | 0.319 ± 0.003 | 0.306 ± 0.008  | 0.338 ± 0.005  | 0.114 ± 0.003  | 0.253 ± 0.000       | 10.777 ± 0.038               |
+| `esm2_prot_tax`      | 0, 1, 2 | 0.401 ± 0.002 | 0.401 ± 0.008 | 0.161 ± 0.003 | 0.321 ± 0.003 | 0.312 ± 0.004  | 0.333 ± 0.006  | 0.111 ± 0.003  | 0.252 ± 0.003       | 10.815 ± 0.020               |
+| `all`                | 0, 1, 2 | 0.379 ± 0.006 | 0.394 ± 0.004 | 0.165 ± 0.005 | 0.313 ± 0.002 | 0.295 ± 0.007  | 0.323 ± 0.004  | 0.106 ± 0.003  | 0.241 ± 0.002       | 10.881 ± 0.028               |
+| `prot_tax`           | 0, 1, 2 | 0.303 ± 0.008 | 0.332 ± 0.008 | 0.133 ± 0.003 | 0.256 ± 0.004 | 0.248 ± 0.006  | 0.262 ± 0.010  | 0.087 ± 0.002  | 0.199 ± 0.005       | 11.351 ± 0.060               |
+| `prot_tax_promoters` | 0, 1, 2 | 0.305 ± 0.003 | 0.316 ± 0.001 | 0.124 ± 0.001 | 0.249 ± 0.002 | 0.232 ± 0.005  | 0.226 ± 0.001  | 0.077 ± 0.002  | 0.178 ± 0.002       | 11.598 ± 0.010               |
 <!-- /cafaeval-table -->
 
-Every run's predictions are kept, so the remaining configs can be scored later with
-`uv run cafa6-ablation cafaeval --sweep feature-groups`.
+AUC and the CAFA metrics measure different things:
+- **AUC** measures how well each term's scores rank proteins, over the whole score range, with
+  every term weighted equally.
+- **The CAFA metrics** score each protein's predicted set of terms at the single best threshold,
+  weighted by information accretion.
+
+The feature groups beyond ESM-2 help the first without helping the second.
+
+### Is `all` the best model?
+
+**No.** It has the best AUC, but on the official evaluator it is the *worst* of the four ESM-2
+models.
+
+**Protein bootstrap.** Within each seed, evaluation proteins are resampled 1,000 times, the same
+resample is used for both models, and the differences are averaged over the 3 seeds. That gives a
+95% CI and a two-sided p ([`summary/significance_bootstrap.csv`](summary/significance_bootstrap.csv)).
+- **Internal Fmax** is the trainer's own metric on the held-out 20%.
+- **Official f_w** is recomputed from each run's saved predictions with the evaluator's
+  settings. It reproduces the CAFA evaluator to within 3e-4 on NK and LK. PK is left out
+  because its known-annotation handling isn't reproduced yet, so PK relies on the seed-level
+  tests above.
+
+| all minus          | Internal Fmax                         | Official f_w (NK + LK)                |
+|:-------------------|:--------------------------------------|:--------------------------------------|
+| esm2               | +0.0061 [+0.0049, +0.0073], p = 0.001 | -0.0103 [-0.0177, -0.0037], p = 0.002 |
+| esm2_prot          | +0.0044 [+0.0032, +0.0057], p = 0.001 | -0.0099 [-0.0176, -0.0034], p = 0.006 |
+| esm2_prot_tax      | -0.0007 [-0.0018, +0.0006], p = 0.326 | -0.0137 [-0.0206, -0.0066], p = 0.001 |
+| prot_tax           | +0.0658 [+0.0641, +0.0676], p = 0.001 | +0.0692 [+0.0595, +0.0787], p = 0.001 |
+| prot_tax_promoters | +0.0675 [+0.0659, +0.0693], p = 0.001 | +0.0762 [+0.0679, +0.0854], p = 0.001 |
+
+- **On the held-out 20%,** `all` beats ESM-2 alone and ties with the same model without
+  promoters (`esm2_prot_tax`).
+- **On the official CAFA6 targets,** every ESM-2 model without promoters significantly beats
+  `all`.
+- **Among those three, the official evaluator can't separate them:**
+  - `esm2_prot_tax` has the best f_w (0.321);
+  - `esm2` has the best f_micro_w (0.255) and S-min (10.77);
+  - every difference between them is within seed noise.
+- **The exception is PK** (proteins with prior annotations), the one setting where `all`
+  scores highest (f_w 0.165 vs 0.161–0.162), though not significantly.
+
+The [architecture search](hparam-search/README.md) repeats this test with a wider network, and the
+ranking holds there: without promoters is significantly better on official f_w.
+
+Every run's predictions and evaluator outputs are kept under `data/ablation/` for later analysis.
 
 ## Caveats
 
-- **Capacity:** promoter configs have about 0.36M more parameters (1.37M vs 1.01M). Part of the
-  promoter gain could come from extra capacity rather than information. A follow-up architecture
-  search (in progress) varies promoter widths and model depth directly.
+- **Capacity:** promoter configs have about 0.36M more parameters (1.37M vs 1.01M). The
+  [architecture search](hparam-search/README.md) varies width directly. A much larger
+  no-promoter network (2.1M parameters) is still the best on official metrics, so the promoter
+  penalty is not a capacity artefact.
 - **Internal split:** random by protein, so homologues leak across it. That inflates absolute
   internal scores. Paired deltas are less affected, but the handcrafted-feature result shows
   internal deltas can still mislead.
@@ -245,9 +323,10 @@ Every run's predictions are kept, so the remaining configs can be scored later w
   few positives and official per-term AUCs are noisy.
 - **Score channels off:** production models blend in a taxon prior and ESM-2 nearest-neighbour
   transfer. These may absorb part of the kingdom and promoter gains.
-- **Three seeds:** enough to separate consistent effects from noise at this scale, but not for
-  formal significance claims about config-level differences. The response-term tests are per
-  GO term, with hundreds of terms per group.
+- **Three seeds:** seed-level t-tests have little power, and none of the ~30 shown are corrected
+  for multiple testing. Config-level claims therefore rest on the protein bootstrap, which
+  resamples evaluation proteins but not training runs. The response-term tests are per GO term,
+  with hundreds of terms per group.
 
 ## Per-configuration details
 
