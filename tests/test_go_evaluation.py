@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from modeling.go_evaluation import (
+from modeling.evaluation.go import (
     GeneOntology,
     build_closed_label_matrix,
     cafa_fmax,

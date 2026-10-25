@@ -175,9 +175,16 @@ Code skill ([.claude/skills/document-results](.claude/skills/document-results/SK
 ## Repository layout
 
 ```text
-src/feature_engineering/   feature blocks: embeddings, handcrafted, taxonomy, promoters/
-src/modeling/              data assembly, NN trainer and predictor, XGBoost baseline,
-                           GO evaluation, official scoring, ablation runner and report
+src/feature_engineering/
+  sequence/                ESM-2 embeddings, handcrafted features, taxonomy
+  promoters/               promoter extraction, alignment rescue, DNA-model embeddings
+src/modeling/
+  data.py                  feature-table assembly shared by every model
+  nn/                      multi-label network: model, training, score-channel blending, prediction
+  gbdt/                    per-GO-term XGBoost baseline
+  evaluation/              ontology propagation, CAFA Fmax / ROC-AUC, official scoring, significance
+  experiments/             feature ablation, architecture search, GO-term-group analyses
+  explain/                 SHAP attributions and the explainability report
 scripts/                   data download and rebuild (scripts/data/), repo utilities
 tests/                     unit tests (uv run pytest)
 docs/                      data sources, feature and model details

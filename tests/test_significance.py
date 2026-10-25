@@ -4,8 +4,8 @@ import unittest
 
 import numpy as np
 
-from modeling.go_evaluation import GeneOntology, cafa_fmax, protein_fmax_curves, weighted_fmax
-from modeling.significance import EvaluationCurves, paired_bootstrap
+from modeling.evaluation.go import GeneOntology, cafa_fmax, protein_fmax_curves, weighted_fmax
+from modeling.evaluation.significance import EvaluationCurves, paired_bootstrap
 
 
 def _ontology() -> GeneOntology:

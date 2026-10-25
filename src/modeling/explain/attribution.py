@@ -30,11 +30,11 @@ from scipy.stats import spearmanr
 from torch import nn
 
 from modeling.data import build_feature_table
-from modeling.go_evaluation import NAMESPACE_TO_ASPECT, GeneOntology, limit_top_predictions, roc_auc_summary
-from modeling.predict_multilabel_nn import TrainedModel, load_trained_model
-from modeling.term_groups import classify_terms, load_term_names
+from modeling.evaluation.go import NAMESPACE_TO_ASPECT, GeneOntology, limit_top_predictions, roc_auc_summary
+from modeling.nn.predict import TrainedModel, load_trained_model
+from modeling.experiments.term_groups import classify_terms, load_term_names
 
-LOGGER = logging.getLogger("cafa6.modeling.explain")
+LOGGER = logging.getLogger("cafa6.modeling.explain.attribution")
 GROUPS = ("esm2", "handcrafted", "kingdom")
 DEEP_DIVE_TERMS = {
     "GO:0009408": "response",
@@ -232,7 +232,7 @@ def main() -> None:
     parser.add_argument("--log-level", default="INFO", choices=("DEBUG", "INFO", "WARNING"))
     args = parser.parse_args()
     logging.basicConfig(level=getattr(logging, args.log_level), format="%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S")
-    from modeling.explain_report import write_explainability_report
+    from modeling.explain.report import write_explainability_report
 
     write_explainability_report(args.model_dirs, args.out, args.cache_dir, args.max_positives, args.nsamples)
 

@@ -54,7 +54,7 @@ from feature_engineering.promoters.ncbi_reference import (
 )
 from feature_engineering.promoters.operons import resolve_operon_leaders
 from feature_engineering.promoters.species_map import ANCHOR_SPECIES, OPERON_AWARE_SPECIES
-from feature_engineering.taxonomy import DEFAULT_TAXDUMP_CACHE_DIR, _download_ncbi_nodes
+from feature_engineering.sequence.taxonomy import DEFAULT_TAXDUMP_CACHE_DIR, _download_ncbi_nodes
 
 LOGGER = logging.getLogger("cafa6.promoters.alignment_rescue")
 HIT_FIELDS = ["qseqid", "sseqid", "pident", "length", "qlen", "slen", "evalue", "bitscore", "qcovhsp", "scovhsp"]

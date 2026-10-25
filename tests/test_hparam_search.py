@@ -5,8 +5,8 @@ import unittest
 import pandas as pd
 import torch
 
-from modeling.hparam_search import DEFAULT_TRIAL, SEARCH_SPACE, best_trial, sample_trials, trial_flags
-from modeling.train_multilabel_nn import MultilabelGOModel
+from modeling.experiments.hparam_search import DEFAULT_TRIAL, SEARCH_SPACE, best_trial, sample_trials, trial_flags
+from modeling.nn.model import MultilabelGOModel
 
 
 class SampleTrialsTests(unittest.TestCase):

@@ -17,9 +17,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from modeling.go_evaluation import NAMESPACE_TO_ASPECT, GeneOntology, roc_auc_summary
+from modeling.evaluation.go import NAMESPACE_TO_ASPECT, GeneOntology, roc_auc_summary
 
-LOGGER = logging.getLogger("cafa6.modeling.evaluate_cafa6")
+LOGGER = logging.getLogger("cafa6.modeling.evaluation.official")
 REGIMES = ("NK", "LK", "PK")
 ASPECTS = {"biological_process": "BP", "molecular_function": "MF", "cellular_component": "CC"}
 # cafaeval result file and column for each reported metric; S-min is lower-is-better.

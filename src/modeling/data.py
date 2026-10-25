@@ -221,7 +221,7 @@ def load_protein_feature_table(path: str | Path) -> pd.DataFrame:
 
 
 def load_taxonomy_feature_table(path: str | Path) -> pd.DataFrame:
-    """Load one-hot taxonomy features (see feature_engineering.taxonomy)."""
+    """Load one-hot taxonomy features (see feature_engineering.sequence.taxonomy)."""
     return pd.read_csv(path, sep="\t")
 
 

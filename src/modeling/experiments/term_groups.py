@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 from scipy.stats import mannwhitneyu
 
-from modeling.go_evaluation import GeneOntology
+from modeling.evaluation.go import GeneOntology
 
 RESPONSE_TO_STIMULUS = "GO:0050896"
 RESPONSE_NAME = re.compile(r"^(cellular )?response to ")

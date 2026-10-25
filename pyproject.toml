@@ -24,21 +24,21 @@ dependencies = [
 ]
 
 [project.scripts]
-cafa6-embeddings = "feature_engineering.embeddings:main"
-cafa6-features = "feature_engineering.protein_features:main"
-cafa6-taxonomy-features = "feature_engineering.taxonomy:main"
+cafa6-embeddings = "feature_engineering.sequence.embeddings:main"
+cafa6-features = "feature_engineering.sequence.protein_features:main"
+cafa6-taxonomy-features = "feature_engineering.sequence.taxonomy:main"
 cafa6-extract-promoters = "feature_engineering.promoters.extract_promoters:main"
 cafa6-build-promoter-reference = "feature_engineering.promoters.build_reference:main"
 cafa6-build-and-extract-promoters = "feature_engineering.promoters.build_and_extract:main"
 cafa6-rescue-promoters = "feature_engineering.promoters.alignment_rescue:main"
 cafa6-embed-promoters = "feature_engineering.promoters.embed_promoters:main"
-cafa6-train-go-models = "modeling.train_go_term_models:main"
-cafa6-train-multilabel-nn = "modeling.train_multilabel_nn:main"
-cafa6-predict-multilabel-nn = "modeling.predict_multilabel_nn:main"
-cafa6-evaluate = "modeling.evaluate_cafa6:main"
-cafa6-ablation = "modeling.ablation:main"
-cafa6-hparam-search = "modeling.hparam_search:main"
-cafa6-explain = "modeling.explain:main"
+cafa6-train-go-models = "modeling.gbdt.train:main"
+cafa6-train-multilabel-nn = "modeling.nn.train:main"
+cafa6-predict-multilabel-nn = "modeling.nn.predict:main"
+cafa6-evaluate = "modeling.evaluation.official:main"
+cafa6-ablation = "modeling.experiments.ablation:main"
+cafa6-hparam-search = "modeling.experiments.hparam_search:main"
+cafa6-explain = "modeling.explain.attribution:main"
 cafa6-repair-metadata = "scripts.repair_embedding_metadata:main"
 
 [dependency-groups]

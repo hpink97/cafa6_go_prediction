@@ -5,7 +5,7 @@ import unittest
 import numpy as np
 import pandas as pd
 
-from modeling.score_channels import (
+from modeling.nn.score_channels import (
     blend_scores_by_aspect,
     exact_cosine_neighbors,
     fit_taxon_prior,

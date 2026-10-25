@@ -1,4 +1,4 @@
-"""Tables and figures for `cafa6-explain` (see modeling.explain).
+"""Tables and figures for `cafa6-explain` (see modeling.explain.attribution).
 
 Per-seed SHAP results are cached under --cache-dir, so figures can be re-drawn without recomputing.
 Writes to results/explainability/:
@@ -29,7 +29,7 @@ from scipy.stats import spearmanr
 from sklearn.cluster import KMeans
 from sklearn.metrics import roc_auc_score
 
-from modeling.explain import (
+from modeling.explain.attribution import (
     DEEP_DIVE_TERMS,
     GROUPS,
     deep_dive,
@@ -41,7 +41,7 @@ from modeling.explain import (
     term_metadata,
 )
 
-LOGGER = logging.getLogger("cafa6.modeling.explain_report")
+LOGGER = logging.getLogger("cafa6.modeling.explain.report")
 # Reference palette (dataviz skill): categorical slots 1-3 and neutral inks.
 GROUP_COLORS = {"esm2": "#2a78d6", "handcrafted": "#eb6834", "kingdom": "#1baf7a"}
 GROUP_LABELS = {"esm2": "ESM-2", "handcrafted": "handcrafted", "kingdom": "kingdom"}

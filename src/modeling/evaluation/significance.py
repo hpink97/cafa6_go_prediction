@@ -24,7 +24,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from modeling.go_evaluation import (
+from modeling.evaluation.go import (
     NAMESPACE_TO_ASPECT,
     GeneOntology,
     ProteinCurves,

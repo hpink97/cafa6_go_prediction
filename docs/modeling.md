@@ -82,7 +82,7 @@ uv run cafa6-train-go-models --top-n 100 --output-dir data/models/go_term_xgboos
 ## Evaluation
 
 **Internal (during training).** A protein-centric, IA-weighted CAFA Fmax per aspect (BP/MF/CC)
-on held-out proteins (`modeling/go_evaluation.py`):
+on held-out proteins (`modeling/evaluation/go.py`):
 - predictions are limited to the top 1,500 per protein and max-propagated to ancestors;
 - precision is averaged over proteins with a prediction, recall over all proteins with truth;
 - recall counts true terms outside the model vocabulary, so a small output space is penalised.

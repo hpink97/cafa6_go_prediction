@@ -7,8 +7,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from modeling.go_evaluation import GeneOntology
-from modeling.term_groups import classify_terms, load_term_names, stratified_permutation_test
+from modeling.evaluation.go import GeneOntology
+from modeling.experiments.term_groups import classify_terms, load_term_names, stratified_permutation_test
 
 OBO = """format-version: 1.2
 
