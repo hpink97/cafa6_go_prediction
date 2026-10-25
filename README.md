@@ -45,11 +45,28 @@ official weighted Fmax (p = 0.001–0.042).
 
 ![Per-term AUC gain from promoters: response terms vs other processes](results/summary/response_terms.png)
 
+**What the final model relies on (SHAP):**
+- ESM-2 carries about 90% of the attribution. No few embedding dimensions dominate, and most
+  important dimensions don't match any handcrafted feature.
+- The handcrafted features it does use are biologically sensible, e.g. PROSITE kinase motifs for
+  kinase activity.
+- Kingdom acts as a switch for plant-specific processes.
+- The ESM-2 dimensions SHAP flags for specific terms capture biology the handcrafted features
+  miss. One dimension separates transcription factors with AUC 0.84, against 0.56 for intrinsic
+  disorder, and DNA binding and TF activity share a set of signature dimensions.
+- GO terms the model predicts with the same embedding dimensions form coherent functional
+  clusters. "Response to" terms cluster together (75% of nearest neighbours, against 11% by
+  chance).
+
+![The model's map of GO terms](results/explainability/go_term_map_labelled.png)
+
 **Full write-ups:**
 - [**Feature ablation**](results/feature-ablation.md): every feature group, the statistics,
   "do promoters help?" and the response-term analysis.
 - [**Architecture search and final model**](results/hparam-search/README.md): 24 trials and the
   architecture × promoter comparison.
+- [**Explainability**](results/explainability/README.md): SHAP across all 2,180 GO terms,
+  deep dives, ESM-2 dimensions, and maps of proteins and GO terms.
 <!-- results:end -->
 
 ## Approach

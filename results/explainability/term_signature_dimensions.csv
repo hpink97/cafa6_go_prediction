@@ -1,0 +1,31 @@
+term,name,known_feature,signature_rank,dimension,term_share,lift,dimension_auc_for_term,known_feature_auc_for_term,rho_with_known_feature,best_handcrafted_correlate,rho_with_best_correlate
+GO:0005634,nucleus,nuclear localisation signal,1,esm2_640_15,0.0036,2.5177,0.5813,0.5631,0.0327,aa_fraction_L,-0.3535
+GO:0005634,nucleus,nuclear localisation signal,2,esm2_640_0,0.0044,2.3791,0.5374,0.5631,0.0134,aa_fraction_L,-0.2891
+GO:0005634,nucleus,nuclear localisation signal,3,esm2_640_629,0.0037,2.2461,0.5634,0.5631,-0.0736,aliphatic_index,0.4223
+GO:0005634,nucleus,nuclear localisation signal,4,esm2_640_222,0.0037,2.1911,0.6582,0.5631,0.1935,gravy,-0.4405
+GO:0005634,nucleus,nuclear localisation signal,5,esm2_640_407,0.0049,2.1601,0.625,0.5631,0.143,aa_fraction_G,-0.3369
+GO:0005886,plasma membrane,transmembrane helices,1,esm2_640_511,0.0042,2.7859,0.6132,0.6948,-0.2759,aa_fraction_S,-0.2884
+GO:0005886,plasma membrane,transmembrane helices,2,esm2_640_531,0.0052,2.5156,0.6321,0.6948,0.2652,aa_fraction_R,-0.2784
+GO:0005886,plasma membrane,transmembrane helices,3,esm2_640_42,0.0041,2.3094,0.6245,0.6948,-0.3055,aromaticity,-0.4351
+GO:0005886,plasma membrane,transmembrane helices,4,esm2_640_132,0.0043,2.296,0.6611,0.6948,0.2102,aa_fraction_K,-0.4089
+GO:0005886,plasma membrane,transmembrane helices,5,esm2_640_312,0.0034,2.2508,0.6304,0.6948,0.1817,aa_fraction_A,0.3512
+GO:0005576,extracellular region,signal peptide score,1,esm2_640_538,0.005,3.1237,0.7148,0.7071,-0.1931,aa_fraction_G,-0.4563
+GO:0005576,extracellular region,signal peptide score,2,esm2_640_328,0.0045,2.7803,0.6852,0.7071,0.2515,signal_peptide_score,0.2515
+GO:0005576,extracellular region,signal peptide score,3,esm2_640_197,0.004,2.5179,0.6111,0.7071,-0.0968,aa_fraction_G,0.1989
+GO:0005576,extracellular region,signal peptide score,4,esm2_640_117,0.0041,2.4917,0.6921,0.7071,0.1029,aa_fraction_M,-0.3009
+GO:0005576,extracellular region,signal peptide score,5,esm2_640_371,0.0035,2.4908,0.6757,0.7071,0.2198,aa_fraction_H,-0.3044
+GO:0003677,DNA binding,isoelectric point (DNA binders are basic),1,esm2_640_368,0.0046,3.1333,0.7114,0.5459,-0.0558,aa_fraction_N,0.3387
+GO:0003677,DNA binding,isoelectric point (DNA binders are basic),2,esm2_640_542,0.0037,2.8169,0.6786,0.5459,0.04,aa_fraction_A,0.385
+GO:0003677,DNA binding,isoelectric point (DNA binders are basic),3,esm2_640_333,0.0049,2.7768,0.6499,0.5459,-0.0571,gravy,-0.3944
+GO:0003677,DNA binding,isoelectric point (DNA binders are basic),4,esm2_640_399,0.0041,2.6613,0.7047,0.5459,0.1152,aa_fraction_Q,-0.2592
+GO:0003677,DNA binding,isoelectric point (DNA binders are basic),5,esm2_640_385,0.0049,2.5573,0.695,0.5459,0.1759,signal_peptide_score,0.2655
+GO:0003700,DNA-binding transcription factor activity,intrinsic disorder,1,esm2_640_399,0.0053,3.4266,0.7897,0.5607,-0.0317,aa_fraction_Q,-0.2592
+GO:0003700,DNA-binding transcription factor activity,intrinsic disorder,2,esm2_640_75,0.0055,3.1015,0.8396,0.5607,-0.0737,instability_index,-0.4363
+GO:0003700,DNA-binding transcription factor activity,intrinsic disorder,3,esm2_640_43,0.004,3.0155,0.7555,0.5607,0.0576,fraction_turn,-0.4307
+GO:0003700,DNA-binding transcription factor activity,intrinsic disorder,4,esm2_640_368,0.0044,3.0002,0.7689,0.5607,0.1026,aa_fraction_N,0.3387
+GO:0003700,DNA-binding transcription factor activity,intrinsic disorder,5,esm2_640_333,0.0048,2.7291,0.6893,0.5607,0.2205,gravy,-0.3944
+GO:0004672,protein kinase activity,PROSITE kinase motif,1,esm2_640_377,0.0069,3.0331,0.7721,0.8939,-0.154,molecular_weight,-0.2464
+GO:0004672,protein kinase activity,PROSITE kinase motif,2,esm2_640_73,0.0052,2.9104,0.7713,0.8939,0.1787,aa_fraction_A,-0.3377
+GO:0004672,protein kinase activity,PROSITE kinase motif,3,esm2_640_351,0.0041,2.7174,0.6806,0.8939,-0.1115,aa_fraction_G,0.4309
+GO:0004672,protein kinase activity,PROSITE kinase motif,4,esm2_640_584,0.0038,2.714,0.7205,0.8939,0.1316,aromaticity,0.2631
+GO:0004672,protein kinase activity,PROSITE kinase motif,5,esm2_640_167,0.0057,2.5893,0.6604,0.8939,0.1066,fraction_polar,0.3
