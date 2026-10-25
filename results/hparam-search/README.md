@@ -9,7 +9,7 @@ features:
 ## Search
 
 - **Setup:** 24 random trials on the `all` feature set (ESM-2 + handcrafted + kingdom +
-  promoters), seed 0, score channels off, as in the [feature ablation](../README.md). Trial 0
+  promoters), seed 0, score channels off, as in the [feature ablation](../feature-ablation.md). Trial 0
   is the default architecture.
 - **Search space:**
   - trunk width 512 / 1024, bottleneck 256 / 512, trunk depth 2 / 3 / 4 layers;

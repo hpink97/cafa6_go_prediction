@@ -1,13 +1,13 @@
 ---
 name: document-results
-description: Document a finished CAFA6 experiment sweep (e.g. the feature-group ablation) as committed results - regenerate tables and figures with `cafa6-ablation report`, write the analysis in results/README.md, and refresh the README headline. Use when the user asks to write up, summarise, document or publish experiment/ablation results, or after a sweep finishes.
+description: Document a finished CAFA6 experiment sweep (e.g. the feature-group ablation) as committed results - regenerate tables and figures with `cafa6-ablation report`, write the analysis in results/feature-ablation.md, and refresh the README headline. Use when the user asks to write up, summarise, document or publish experiment/ablation results, or after a sweep finishes.
 ---
 
 # Document experiment results
 
 Turns a finished sweep under `data/ablation/<sweep>/` into the committed `results/` directory:
 
-- **`results/README.md`:** the analysis.
+- **`results/feature-ablation.md`:** the analysis (linked from the `results/README.md` index).
 - **`results/summary/`:** cross-run CSVs and figures.
 - **`results/<config>/`:** one directory per configuration, with CSVs and plots.
 
@@ -45,7 +45,7 @@ This rewrites everything under `results/summary/` and `results/<config>/`. Then 
 and look at it: check for label collisions, empty panels, and a sensible colour scale on the
 heatmap.
 
-## 3. Write `results/README.md`
+## 3. Write `results/feature-ablation.md`
 
 Start from [template.md](template.md) and fill in every section from the CSVs.
 
@@ -109,7 +109,9 @@ Replace only the block between `<!-- results:start -->` and `<!-- results:end --
 - a 2–3 line headline;
 - a compact table (config × internal and official macro ROC-AUC, mean ± sd), plus the official
   CAFA scores (`f_w`, `f_micro_w`) of the configs `cafaeval` covered;
-- a link to `results/README.md`.
+- a link to `results/feature-ablation.md`;
+- if the headline figure's inputs changed, regenerate it with
+  `uv run python scripts/plot_summary_figure.py`.
 
 Leave the rest of the README alone.
 
