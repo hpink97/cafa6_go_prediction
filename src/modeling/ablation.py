@@ -201,9 +201,13 @@ def main() -> None:
     cafaeval_parser.add_argument("--configs", nargs="+", choices=tuple(CONFIGS), default=list(CONFIGS))
     cafaeval_parser.add_argument("--seeds", type=int, nargs="+", default=None, help="Default: every finished seed")
     cafaeval_parser.add_argument("--threads", type=int, default=10)
+    significance_parser = commands.add_parser("significance", help="Paired protein bootstrap: reference config vs each other")
+    significance_parser.add_argument("--reference", choices=tuple(CONFIGS), default="all")
+    significance_parser.add_argument("--n-bootstrap", type=int, default=1000)
+    significance_parser.add_argument("--out", type=Path, default=Path("results/summary/significance_bootstrap.csv"))
     report_parser = commands.add_parser("report", help="Write tables and figures for a finished sweep")
     report_parser.add_argument("--out", type=Path, default=Path("results"))
-    for sub in (run_parser, cafaeval_parser, report_parser):
+    for sub in (run_parser, cafaeval_parser, significance_parser, report_parser):
         sub.add_argument("--sweep", required=True, help="Sweep name; runs live in <root>/<sweep>/")
         sub.add_argument("--root", type=Path, default=DEFAULT_ROOT)
         sub.add_argument("--release-dir", type=Path, default=DEFAULT_RELEASE_DIR)
@@ -230,6 +234,14 @@ def main() -> None:
         for directory in select_runs(args.root / args.sweep, args.configs, args.seeds, args.best):
             score_cafaeval(directory, args.release_dir, args.threads)
             LOGGER.info("cafaeval scored %s", directory)
+    elif args.command == "significance":
+        from modeling.significance import compare_to_reference
+
+        others = [name for name in CONFIGS if name != args.reference and (args.root / args.sweep / name).exists()]
+        table = compare_to_reference(args.root / args.sweep, args.reference, others, args.release_dir, args.n_bootstrap)
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        table.round(6).to_csv(args.out, index=False)
+        LOGGER.info("wrote %s", args.out)
     else:
         from modeling.ablation_report import write_report
 

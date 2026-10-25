@@ -78,6 +78,7 @@ class ReportTests(unittest.TestCase):
             auc = deltas[deltas["metric"] == "internal_macro_roc_auc"].iloc[0]
             self.assertAlmostEqual(auc["delta_mean"], 0.01)
             self.assertEqual((auc["n_seeds_improved"], auc["n_seeds"]), (2, 2))
+            self.assertIn("p_paired_t", deltas.columns)
             # S-min is lower-is-better, so a higher value counts as getting worse.
             s_min = deltas[deltas["metric"] == "official_s_w_overall_mean"].iloc[0]
             self.assertEqual(s_min["n_seeds_improved"], 0)

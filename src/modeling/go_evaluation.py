@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -258,36 +259,41 @@ def build_truth_ia_totals(
     return totals
 
 
-def cafa_fmax(
+@dataclass
+class ProteinCurves:
+    """Per-protein IA-weighted precision and recall at each threshold, for one GO aspect.
+
+    Rows are the proteins with ground truth in the aspect (`rows` indexes the input protein axis).
+    Fmax over any re-weighting of proteins (e.g. a bootstrap resample) follows from these arrays
+    without touching the predictions again; see `weighted_fmax`.
+    """
+
+    rows: np.ndarray
+    precision: np.ndarray
+    has_prediction: np.ndarray
+    recall: np.ndarray
+    thresholds: np.ndarray
+
+
+def protein_fmax_curves(
     targets: np.ndarray,
-    probabilities: np.ndarray,
+    propagated_probabilities: np.ndarray,
     terms: list[str],
     ontology: GeneOntology,
     ia_weights: dict[str, float],
     *,
     truth_ia_totals: dict[str, np.ndarray] | None = None,
     threshold_step: float = 0.01,
-    propagate: bool = True,
-    max_predictions: int | None = 1500,
     include_aspects: set[str] | None = None,
-) -> tuple[dict[str, float | int], pd.DataFrame]:
-    """Compute CAFA-normalized, IA-weighted protein-centric Fmax by namespace."""
-    if targets.shape != probabilities.shape or targets.shape[1] != len(terms):
+) -> dict[str, ProteinCurves]:
+    """Per-protein CAFA curves by aspect, from ancestor-propagated predictions."""
+    if targets.shape != propagated_probabilities.shape or targets.shape[1] != len(terms):
         raise ValueError("Targets, probabilities, and terms have incompatible shapes")
     if not 0.0 < threshold_step < 1.0:
         raise ValueError("threshold_step must be between 0 and 1")
-
     propagated_targets = ontology.propagate_scores(targets, terms) > 0
-    if propagate:
-        limited_probabilities = limit_top_predictions(probabilities, max_predictions)
-        propagated_probabilities = ontology.propagate_scores(limited_probabilities, terms, copy=False)
-    else:
-        propagated_probabilities = probabilities
     thresholds = np.arange(threshold_step, 1.0, threshold_step)
-    curve_rows = []
-    summary: dict[str, float | int] = {}
-    aspect_fmax = []
-
+    curves: dict[str, ProteinCurves] = {}
     for namespace, aspect in NAMESPACE_TO_ASPECT.items():
         if include_aspects is not None and aspect not in include_aspects:
             continue
@@ -309,8 +315,7 @@ def cafa_fmax(
         else:
             total_truth_weight = np.asarray(truth_ia_totals[namespace], dtype=np.float64)
         has_ground_truth = total_truth_weight > 0
-        n_ground_truth = int(has_ground_truth.sum())
-        if not n_ground_truth:
+        if not has_ground_truth.any():
             continue
 
         namespace_targets = namespace_targets[has_ground_truth]
@@ -340,32 +345,88 @@ def cafa_fmax(
         predicted_weight = np.cumsum(predicted_buckets[:, ::-1], axis=1)[:, ::-1][:, 1:]
         true_positive_weight = np.cumsum(true_positive_buckets[:, ::-1], axis=1)[:, ::-1][:, 1:]
         has_predictions = predicted_weight > 0
-        n_predicted_by_threshold = has_predictions.sum(axis=0)
-        protein_precision = np.divide(
-            true_positive_weight,
-            predicted_weight,
-            out=np.zeros_like(true_positive_weight),
-            where=has_predictions,
+        curves[aspect] = ProteinCurves(
+            rows=np.flatnonzero(has_ground_truth),
+            precision=np.divide(
+                true_positive_weight,
+                predicted_weight,
+                out=np.zeros_like(true_positive_weight),
+                where=has_predictions,
+            ),
+            has_prediction=has_predictions,
+            recall=true_positive_weight / total_truth_weight[:, np.newaxis],
+            thresholds=thresholds,
         )
-        protein_recall = true_positive_weight / total_truth_weight[:, np.newaxis]
+    return curves
+
+
+def weighted_fmax(curves: ProteinCurves, protein_weights: np.ndarray) -> np.ndarray:
+    """CAFA Fmax under protein weights of shape (n_weightings, n_input_proteins), e.g. bootstrap counts.
+
+    Precision averages over weighted proteins with a prediction at each threshold, recall over all
+    weighted proteins with ground truth, exactly as in `cafa_fmax`.
+    """
+    weights = np.atleast_2d(protein_weights)[:, curves.rows].astype(np.float64)
+    n_predicted = weights @ curves.has_prediction
+    precision = np.divide(weights @ curves.precision, n_predicted, out=np.zeros_like(n_predicted), where=n_predicted > 0)
+    recall = (weights @ curves.recall) / weights.sum(axis=1, keepdims=True)
+    f_score = np.divide(2.0 * precision * recall, precision + recall, out=np.zeros_like(precision), where=(precision + recall) > 0)
+    return f_score.max(axis=1)
+
+
+def cafa_fmax(
+    targets: np.ndarray,
+    probabilities: np.ndarray,
+    terms: list[str],
+    ontology: GeneOntology,
+    ia_weights: dict[str, float],
+    *,
+    truth_ia_totals: dict[str, np.ndarray] | None = None,
+    threshold_step: float = 0.01,
+    propagate: bool = True,
+    max_predictions: int | None = 1500,
+    include_aspects: set[str] | None = None,
+) -> tuple[dict[str, float | int], pd.DataFrame]:
+    """Compute CAFA-normalized, IA-weighted protein-centric Fmax by namespace."""
+    if targets.shape != probabilities.shape or targets.shape[1] != len(terms):
+        raise ValueError("Targets, probabilities, and terms have incompatible shapes")
+    if propagate:
+        limited_probabilities = limit_top_predictions(probabilities, max_predictions)
+        propagated_probabilities = ontology.propagate_scores(limited_probabilities, terms, copy=False)
+    else:
+        propagated_probabilities = probabilities
+    curves = protein_fmax_curves(
+        targets,
+        propagated_probabilities,
+        terms,
+        ontology,
+        ia_weights,
+        truth_ia_totals=truth_ia_totals,
+        threshold_step=threshold_step,
+        include_aspects=include_aspects,
+    )
+    curve_rows = []
+    summary: dict[str, float | int] = {}
+    aspect_fmax = []
+    for aspect, aspect_curves in curves.items():
+        namespace = ASPECT_TO_NAMESPACE[aspect]
+        n_ground_truth = len(aspect_curves.rows)
+        n_predicted_by_threshold = aspect_curves.has_prediction.sum(axis=0)
         precision_by_threshold = np.divide(
-            protein_precision.sum(axis=0),
+            aspect_curves.precision.sum(axis=0),
             n_predicted_by_threshold,
-            out=np.zeros(len(thresholds), dtype=np.float64),
+            out=np.zeros(len(aspect_curves.thresholds), dtype=np.float64),
             where=n_predicted_by_threshold > 0,
         )
-        recall_by_threshold = protein_recall.mean(axis=0)
+        recall_by_threshold = aspect_curves.recall.mean(axis=0)
         f_by_threshold = np.divide(
             2.0 * precision_by_threshold * recall_by_threshold,
             precision_by_threshold + recall_by_threshold,
-            out=np.zeros(len(thresholds), dtype=np.float64),
+            out=np.zeros(len(aspect_curves.thresholds), dtype=np.float64),
             where=(precision_by_threshold + recall_by_threshold) > 0,
         )
-        for threshold_index, threshold in enumerate(thresholds):
+        for threshold_index, threshold in enumerate(aspect_curves.thresholds):
             n_predicted = int(n_predicted_by_threshold[threshold_index])
-            precision = float(precision_by_threshold[threshold_index])
-            recall = float(recall_by_threshold[threshold_index])
-            f_score = float(f_by_threshold[threshold_index])
             curve_rows.append(
                 {
                     "namespace": namespace,
@@ -374,13 +435,13 @@ def cafa_fmax(
                     "n_ground_truth": n_ground_truth,
                     "n_predicted": n_predicted,
                     "coverage": n_predicted / n_ground_truth,
-                    "weighted_precision": precision,
-                    "weighted_recall": recall,
-                    "weighted_f": f_score,
+                    "weighted_precision": float(precision_by_threshold[threshold_index]),
+                    "weighted_recall": float(recall_by_threshold[threshold_index]),
+                    "weighted_f": float(f_by_threshold[threshold_index]),
                 }
             )
 
-        namespace_curve = curve_rows[-len(thresholds):]
+        namespace_curve = curve_rows[-len(aspect_curves.thresholds):]
         best = max(namespace_curve, key=lambda row: row["weighted_f"])
         summary[f"cafa_fmax_{aspect}"] = best["weighted_f"]
         summary[f"cafa_threshold_{aspect}"] = best["threshold"]
@@ -391,6 +452,7 @@ def cafa_fmax(
 
     summary["cafa_fmax_mean"] = float(np.mean(aspect_fmax)) if aspect_fmax else float("nan")
     return summary, pd.DataFrame(curve_rows)
+
 
 def roc_auc_summary(
     targets: np.ndarray,

@@ -58,8 +58,17 @@ Never type numbers by hand.
   `n_seeds_improved / n_seeds`.
 
 **Findings.** State each effect as paired change ± sd plus how many seeds agree on the sign.
-- Call an effect **consistent** only when every seed agrees and |mean| > sd.
-- Otherwise call it **inconclusive**. Don't say "significant" with three seeds.
+`deltas.csv` also has `p_paired_t`, a paired t-test across seeds (df = seeds − 1).
+- Call an effect **significant** only when p_paired_t < 0.05 *and* every seed agrees.
+- Call it **consistent** when every seed agrees and |mean| > sd but p ≥ 0.05.
+- Otherwise call it **inconclusive**.
+- Always say how weak three seeds are:
+  - a sign test can never go below p = 0.25 with three seeds;
+  - a t-test with 2 degrees of freedom only reaches p < 0.05 for large, very consistent effects;
+  - many comparisons × metrics are tested with no multiple-testing correction, so a single
+    p ≈ 0.04 is weak evidence.
+
+  A non-significant result is "not detected with 3 seeds", never "no effect".
 
 **Do promoters help?** This section is required. Answer it from:
 - the **+ all promoters (with ESM-2)** and **+ all promoters (no ESM-2)** deltas, which separate
