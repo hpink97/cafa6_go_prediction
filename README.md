@@ -8,25 +8,48 @@ ablation measures what each feature group adds, scored with ROC-AUC and the offi
 evaluator.
 
 <!-- results:start -->
-**Results** (6 feature configurations × 3 seeds, paired):
-- **ESM-2 carries most of the signal.** Kingdom features add a small, consistent gain; handcrafted
-  features do not transfer to the official CAFA6 truth.
-- **Promoter embeddings consistently improve per-term ranking (macro ROC-AUC)**, internally and
-  officially, but not CAFA Fmax.
-- **Promoters help "response to …" terms most:** twice the gain of other processes without ESM-2
-  (p = 0.0001). With ESM-2 that extra benefit largely disappears.
+## Results
 
-| Config | Feature groups | Internal macro AUC | Official macro AUC |
-|---|---|---|---|
-| `esm2` | ESM-2 | 0.887 ± 0.002 | 0.838 ± 0.003 |
-| `esm2_prot` | + handcrafted | 0.889 ± 0.002 | 0.834 ± 0.004 |
-| `esm2_prot_tax` | + kingdom | 0.898 ± 0.001 | 0.844 ± 0.006 |
-| `all` | + promoters | **0.906 ± 0.003** | **0.850 ± 0.002** |
-| `prot_tax` | handcrafted + kingdom only | 0.829 ± 0.006 | 0.794 ± 0.007 |
-| `prot_tax_promoters` | + promoters, no ESM-2 | 0.843 ± 0.001 | 0.799 ± 0.005 |
+Six feature configurations and a 24-trial architecture search were run, each final model on 3
+seeds. Every model was scored on a random 20% holdout and with the official CAFA evaluator on the
+[CAFA6 final release](https://doi.org/10.6084/m9.figshare.32861969) (8,023 proteins annotated
+after training).
 
-Official CAFA evaluator: see [results/README.md](results/README.md#official-cafa-scores).
-Full analysis, figures and per-config outputs are in [results/](results/README.md).
+- **ESM-2 carries the signal:** +0.065 official weighted Fmax over handcrafted + kingdom features
+  alone (p < 0.001).
+- **Promoter DNA embeddings help ranking but hurt the official score.**
+  - They raise per-term ROC-AUC on every seed.
+  - On the CAFA6 targets the promoter model is significantly *worse* than every ESM-2 model
+    without promoters: −0.010 to −0.014 weighted Fmax, p ≤ 0.006, paired protein bootstrap.
+  - Promoter coverage is much patchier for those targets than for training proteins.
+- **Promoters help "response to …" GO terms most,** as hypothesised for expression-driven
+  processes: twice the gain of other processes without ESM-2 (p = 0.0001). Most of that signal
+  is already captured by ESM-2.
+- **A random holdout would have picked the wrong model.** The best internal models include
+  promoters. The best model on the official targets is a wider network on ESM-2 + handcrafted +
+  kingdom features without promoters: weighted Fmax **0.326**, against 0.313 for the default
+  architecture with all features.
+
+![Internal holdout vs official CAFA6 score for each model](results/summary/internal_vs_official.png)
+
+| Architecture | Features | Official weighted Fmax | Official macro AUC | Internal Fmax |
+|---|---|---|---|---|
+| default | ESM-2 | 0.319 ± 0.006 | 0.838 ± 0.003 | 0.451 ± 0.002 |
+| default | ESM-2 + handcrafted + kingdom | 0.321 ± 0.003 | 0.844 ± 0.006 | 0.457 ± 0.002 |
+| default | + promoters | 0.313 ± 0.002 | **0.850 ± 0.002** | 0.457 ± 0.001 |
+| wider (search) | + promoters | 0.321 ± 0.004 | **0.850 ± 0.008** | **0.467 ± 0.004** |
+| **wider (search)** | **ESM-2 + handcrafted + kingdom** | **0.326 ± 0.008** | 0.844 ± 0.003 | 0.464 ± 0.002 |
+
+Values are mean ± sd over 3 seeds. In the protein bootstrap the last row beats rows 2–4 on
+official weighted Fmax (p = 0.001–0.042).
+
+![Per-term AUC gain from promoters: response terms vs other processes](results/summary/response_terms.png)
+
+**Full write-ups:**
+- [**Feature ablation**](results/feature-ablation.md): every feature group, the statistics,
+  "do promoters help?" and the response-term analysis.
+- [**Architecture search and final model**](results/hparam-search/README.md): 24 trials and the
+  architecture × promoter comparison.
 <!-- results:end -->
 
 ## Approach
@@ -111,19 +134,26 @@ uv run cafa6-evaluate data/submissions     # official CAFA scores for every file
 ## Reproducing the ablation
 
 ```bash
-uv run cafa6-ablation run --sweep feature-groups             # 6 configs x 3 seeds, ROC-AUC scored (~3.5 h on an M4 Pro)
-uv run cafa6-ablation cafaeval --sweep feature-groups --best # official CAFA evaluator on the best config (~20 min per seed)
-uv run cafa6-ablation report --sweep feature-groups          # tables and figures -> results/
+uv run cafa6-ablation run --sweep feature-groups           # 6 configs x 3 seeds, ROC-AUC scored (~3.5 h on an M4 Pro)
+uv run cafa6-ablation cafaeval --sweep feature-groups      # official CAFA evaluator (~20 min per run)
+uv run cafa6-ablation significance --sweep feature-groups  # paired protein bootstrap vs the reference config
+uv run cafa6-ablation report --sweep feature-groups        # tables and figures -> results/
+
+uv run cafa6-hparam-search run --sweep arch --features all --trials 24   # architecture search
+uv run cafa6-hparam-search finalize --sweep arch                         # selected trial on seeds 1-2
+uv run cafa6-hparam-search report --sweep arch                           # -> results/hparam-search/
+uv run python scripts/plot_summary_figure.py                             # headline figure above
 ```
 
-Each run trains with the score channels off, so only the feature groups differ. Seeds are shared
+Each run trains with the score channels off, so only the input features differ. Seeds are shared
 across configs, so every comparison is paired.
-- **Every run** is scored by ROC-AUC, on the internal holdout and against the CAFA6 truth.
-- **The official evaluator** costs about 20 minutes per run, so it runs only on the config with
-  the best internal score. Predictions for every run are kept, so
-  `cafa6-ablation cafaeval --sweep feature-groups` can score the rest later. The write-up in [results/README.md](results/README.md)
-is produced with the `document-results` Claude Code skill
-([.claude/skills/document-results](.claude/skills/document-results/SKILL.md)).
+- **Every run** is scored by ROC-AUC, on the internal holdout and against the CAFA6 truth, and
+  by the official CAFA evaluator.
+- **Run-level differences** are tested with paired t-tests across seeds and a paired bootstrap
+  over evaluation proteins.
+
+The write-ups in [results/](results/README.md) are produced with the `document-results` Claude
+Code skill ([.claude/skills/document-results](.claude/skills/document-results/SKILL.md)).
 
 ## Repository layout
 

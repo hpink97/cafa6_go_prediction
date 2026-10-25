@@ -1,0 +1,13 @@
+reference,other,metric,delta,ci_low,ci_high,p_bootstrap,n_seeds,n_bootstrap
+winner_esm2_prot_tax,winner_all,internal_fmax,-0.002978,-0.004299,-0.001752,0.001,3,1000
+winner_esm2_prot_tax,default_esm2_prot_tax,internal_fmax,0.00629,0.005257,0.007468,0.001,3,1000
+winner_esm2_prot_tax,default_all,internal_fmax,0.007037,0.005612,0.00817,0.001,3,1000
+winner_esm2_prot_tax,winner_all,official_f_w_nk_lk,0.008409,0.000668,0.014799,0.038,3,1000
+winner_esm2_prot_tax,default_esm2_prot_tax,official_f_w_nk_lk,0.006401,0.000358,0.012779,0.042,3,1000
+winner_esm2_prot_tax,default_all,official_f_w_nk_lk,0.020086,0.013433,0.02761,0.001,3,1000
+winner_all,default_esm2_prot_tax,internal_fmax,0.009269,0.008088,0.010633,0.001,3,1000
+winner_all,default_all,internal_fmax,0.010015,0.008793,0.011178,0.001,3,1000
+winner_all,default_esm2_prot_tax,official_f_w_nk_lk,-0.002008,-0.007577,0.006591,0.818,3,1000
+winner_all,default_all,official_f_w_nk_lk,0.011677,0.006507,0.019515,0.001,3,1000
+default_esm2_prot_tax,default_all,internal_fmax,0.000747,-0.000609,0.00177,0.326,3,1000
+default_esm2_prot_tax,default_all,official_f_w_nk_lk,0.013684,0.006603,0.020607,0.001,3,1000

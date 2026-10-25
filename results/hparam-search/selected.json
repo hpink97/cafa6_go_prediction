@@ -1,0 +1,15 @@
+{
+  "trial": "trial10",
+  "selection_metric": "validation_nn_cafa_fmax_mean",
+  "features": "all",
+  "esm2_projection": 256,
+  "promoter_projection": 128,
+  "promoter_fusion": 32,
+  "trunk_layers": 2,
+  "trunk_dim": 1024,
+  "bottleneck_dim": 512,
+  "branch_dropout": 0.1,
+  "trunk_dropout": 0.2,
+  "learning_rate": 0.0003,
+  "weight_decay": 0.001
+}
