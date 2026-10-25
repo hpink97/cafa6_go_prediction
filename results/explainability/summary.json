@@ -1,0 +1,29 @@
+{
+  "esm2_dimension_seed_spearman":[
+    0.6790499673,
+    0.6483214681,
+    0.6743300003
+  ],
+  "concentration":{
+    "all terms":{
+      "gini":0.1083885486,
+      "top_10_share":0.0256062485,
+      "top_64_share":0.1395436674
+    },
+    "Biological process":{
+      "gini":0.1137364995,
+      "top_10_share":0.026916055,
+      "top_64_share":0.1428326666
+    },
+    "Molecular function":{
+      "gini":0.1102002992,
+      "top_10_share":0.0258757919,
+      "top_64_share":0.1401528865
+    },
+    "Cellular component":{
+      "gini":0.1240629657,
+      "top_10_share":0.0274919532,
+      "top_64_share":0.1468420476
+    }
+  }
+}
