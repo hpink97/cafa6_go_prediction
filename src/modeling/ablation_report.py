@@ -26,6 +26,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.colors import LinearSegmentedColormap
+from scipy.stats import ttest_1samp
 
 from modeling.ablation import COMMON_TRAIN_FLAGS, COMPARISONS, CONFIGS, collect_run
 from modeling.go_evaluation import GeneOntology, build_truth_ia_totals, cafa_fmax, load_ia_weights
@@ -109,6 +110,9 @@ def paired_deltas(runs: pd.DataFrame) -> pd.DataFrame:
             if not len(deltas):
                 continue
             better = -deltas if metric.startswith("official_s_w") else deltas
+            # Paired t-test across seeds (one-sample t on the per-seed differences); with three
+            # seeds it has 2 degrees of freedom, so only large, consistent effects reach p < 0.05.
+            p_value = ttest_1samp(deltas, 0.0).pvalue if len(deltas) > 1 and deltas.std() > 0 else np.nan
             rows.append(
                 {
                     "comparison": label,
@@ -119,6 +123,7 @@ def paired_deltas(runs: pd.DataFrame) -> pd.DataFrame:
                     "delta_sd": deltas.std(ddof=1) if len(deltas) > 1 else np.nan,
                     "n_seeds_improved": int((better > 0).sum()),
                     "n_seeds": len(deltas),
+                    "p_paired_t": p_value,
                 }
             )
     return pd.DataFrame(rows)

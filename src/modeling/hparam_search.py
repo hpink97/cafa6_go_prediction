@@ -7,6 +7,7 @@ ablation runs), seed by seed.
 
     cafa6-hparam-search run --sweep arch --features all --trials 24
     cafa6-hparam-search finalize --sweep arch            # winner on seeds 1, 2
+    cafa6-hparam-search finalize --sweep arch --features esm2_prot_tax --seeds 0 1 2   # winner, other features
     cafa6-hparam-search report --sweep arch              # tables and figures -> results/hparam-search/
 """
 
@@ -96,9 +97,11 @@ def trial_flags(trial: dict) -> list[str]:
     ]
 
 
-def train_trial(sweep_dir: Path, index: int, trial: dict, features: str, seed: int, release_dir: Path) -> Path:
+def train_trial(
+    sweep_dir: Path, index: int, trial: dict, features: str, seed: int, release_dir: Path, name: str | None = None
+) -> Path:
     """Train, predict the ground-truth proteins and AUC-score one trial x seed (resumable)."""
-    directory = sweep_dir / f"trial{index:02d}" / f"seed{seed}"
+    directory = sweep_dir / (name or f"trial{index:02d}") / f"seed{seed}"
     directory.mkdir(parents=True, exist_ok=True)
     (directory.parent / "trial.json").write_text(json.dumps({"features": features, **trial}, indent=2) + "\n")
     if not (directory / "model" / "summary.json").exists():
@@ -112,7 +115,7 @@ def train_trial(sweep_dir: Path, index: int, trial: dict, features: str, seed: i
         _run_logged(command, directory / "logs" / "train.log")
     for cache in directory.glob("promoter_cache.csv*"):
         cache.unlink()
-    predictions = directory / "predictions" / f"trial{index:02d}_seed{seed}.tsv"
+    predictions = directory / "predictions" / f"{directory.parent.name}_seed{seed}.tsv"
     if not predictions.exists():
         truth_files = [str(release_dir / f"May2026_groundtruth_{regime}.tsv") for regime in ("NK", "LK", "PK")]
         command = [sys.executable, "-m", "modeling.predict_multilabel_nn", str(directory / "model"), "--output", str(predictions), "--protein-ids", *truth_files]
@@ -137,7 +140,8 @@ def run_metrics(run: Path) -> dict:
 
 def collect_trials(sweep_dir: Path) -> pd.DataFrame:
     rows = []
-    for trial_dir in sorted(sweep_dir.glob("trial*")):
+    # Search trials only (trialNN); retrained winners on other features (trialNN_<features>) are excluded.
+    for trial_dir in sorted(path for path in sweep_dir.glob("trial*") if path.name.removeprefix("trial").isdigit()):
         trial = json.loads((trial_dir / "trial.json").read_text())
         for run in sorted(trial_dir.glob("seed*")):
             if (run / "official_auc.json").exists():
@@ -223,6 +227,9 @@ def main() -> None:
     run_parser.add_argument("--search-seed", type=int, default=0, help="Seed for drawing the trials")
     finalize_parser = commands.add_parser("finalize", help="Retrain the selected trial on more seeds")
     finalize_parser.add_argument("--seeds", type=int, nargs="+", default=[1, 2])
+    finalize_parser.add_argument(
+        "--features", choices=tuple(CONFIGS), default=None, help="Retrain the winner on another feature set (default: its own)"
+    )
     report_parser = commands.add_parser("report", help="Tables and figures")
     report_parser.add_argument("--out", type=Path, default=Path("results/hparam-search"))
     report_parser.add_argument("--ablation-sweep", type=Path, default=Path("data/ablation/feature-groups"))
@@ -243,10 +250,13 @@ def main() -> None:
         trials = collect_trials(sweep_dir)
         winner = best_trial(trials)
         trial = json.loads((sweep_dir / winner / "trial.json").read_text())
-        features = trial.pop("features")
-        LOGGER.info("selected %s on %s: %s", winner, SELECTION_METRIC, trial)
+        searched_features = trial.pop("features")
+        features = args.features or searched_features
+        # The winner on other features lives beside the trials, e.g. trial10_esm2_prot_tax/.
+        name = None if features == searched_features else f"{winner}_{features}"
+        LOGGER.info("selected %s on %s: %s; training on %s", winner, SELECTION_METRIC, trial, features)
         for seed in args.seeds:
-            train_trial(sweep_dir, int(winner.removeprefix("trial")), trial, features, seed, args.release_dir)
+            train_trial(sweep_dir, int(winner.removeprefix("trial")), trial, features, seed, args.release_dir, name=name)
     else:
         write_report(sweep_dir, args.out, args.ablation_sweep)
 
