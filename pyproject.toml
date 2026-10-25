@@ -33,6 +33,7 @@ cafa6-train-multilabel-nn = "modeling.train_multilabel_nn:main"
 cafa6-predict-multilabel-nn = "modeling.predict_multilabel_nn:main"
 cafa6-evaluate = "modeling.evaluate_cafa6:main"
 cafa6-ablation = "modeling.ablation:main"
+cafa6-hparam-search = "modeling.hparam_search:main"
 cafa6-repair-metadata = "scripts.repair_embedding_metadata:main"
 
 [dependency-groups]

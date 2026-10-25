@@ -21,7 +21,7 @@ from feature_engineering.taxonomy import classify_kingdoms, encode_kingdom, enco
 from modeling.data import PLANT_SPECIFIC_PROMOTER_PREFIX, PromoterImputer, load_protein_feature_table
 from modeling.go_evaluation import NAMESPACE_TO_ASPECT, GeneOntology, limit_top_predictions
 from modeling.score_channels import exact_cosine_neighbors, knn_annotation_scores, load_taxon_prior
-from modeling.train_multilabel_nn import MultilabelGOModel, _apply_channel_selection, _resolve_device
+from modeling.train_multilabel_nn import PROMOTER_FUSION_DIM, MultilabelGOModel, _apply_channel_selection, _resolve_device
 
 LOGGER = logging.getLogger("cafa6.modeling.predict_multilabel_nn")
 PROMOTER_PREFIXES = ("promoter_nt", PLANT_SPECIFIC_PROMOTER_PREFIX)
@@ -109,6 +109,9 @@ def run(
         bottleneck_dim=checkpoint["bottleneck_dim"],
         branch_dropout=checkpoint["branch_dropout"],
         trunk_dropout=checkpoint["trunk_dropout"],
+        projection_dims=checkpoint.get("projection_dims"),
+        promoter_fusion_dim=checkpoint.get("promoter_fusion_dim", PROMOTER_FUSION_DIM),
+        trunk_layers=checkpoint.get("trunk_layers", 2),
     )
     model.load_state_dict(checkpoint["model_state_dict"])
     model.to(device).eval()
