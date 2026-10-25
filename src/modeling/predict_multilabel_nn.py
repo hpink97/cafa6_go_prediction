@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -72,6 +73,43 @@ def submission_rows(protein_ids: list[str], terms: list[str], scores: np.ndarray
     )
 
 
+@dataclass
+class TrainedModel:
+    """A trained checkpoint in eval mode, with the feature layout and preprocessing it expects."""
+
+    model: MultilabelGOModel
+    terms: list[str]
+    feature_names: list[str]
+    medians: np.ndarray
+    means: np.ndarray
+    scales: np.ndarray
+
+
+def load_trained_model(model_dir: Path, device: torch.device | str = "cpu") -> TrainedModel:
+    """Rebuild the network from `best_model.pt` (whatever architecture it was trained with)."""
+    checkpoint = torch.load(model_dir / "best_model.pt", map_location="cpu", weights_only=True)
+    terms = list(checkpoint["terms"])
+    with np.load(model_dir / "preprocessing.npz") as preprocessing:
+        feature_names = [str(name) for name in preprocessing["feature_names"]]
+        medians = preprocessing["medians"]
+        means = preprocessing["means"]
+        scales = preprocessing["scales"]
+    model = MultilabelGOModel(
+        checkpoint["feature_groups"],
+        n_terms=len(terms),
+        trunk_dim=checkpoint["trunk_dim"],
+        bottleneck_dim=checkpoint["bottleneck_dim"],
+        branch_dropout=checkpoint["branch_dropout"],
+        trunk_dropout=checkpoint["trunk_dropout"],
+        projection_dims=checkpoint.get("projection_dims"),
+        promoter_fusion_dim=checkpoint.get("promoter_fusion_dim", PROMOTER_FUSION_DIM),
+        trunk_layers=checkpoint.get("trunk_layers", 2),
+    )
+    model.load_state_dict(checkpoint["model_state_dict"])
+    model.to(device).eval()
+    return TrainedModel(model, terms, feature_names, medians, means, scales)
+
+
 def run(
     model_dir: Path,
     embeddings_dir: Path,
@@ -90,31 +128,12 @@ def run(
 ) -> None:
     config = json.loads((model_dir / "run_config.json").read_text())
     ensemble_config = json.loads((model_dir / "ensemble_config.json").read_text())
-    checkpoint = torch.load(model_dir / "best_model.pt", map_location="cpu", weights_only=True)
-    terms = list(checkpoint["terms"])
+    device = _resolve_device(device_name)
+    trained = load_trained_model(model_dir, device)
+    model, terms, feature_names = trained.model, trained.terms, trained.feature_names
+    medians, means, scales = trained.medians, trained.means, trained.scales
     ontology = GeneOntology.from_obo(config["go_obo_path"])
     aspects = np.asarray([NAMESPACE_TO_ASPECT[ontology.namespaces[term]] for term in terms])
-    with np.load(model_dir / "preprocessing.npz") as preprocessing:
-        feature_names = [str(name) for name in preprocessing["feature_names"]]
-        medians = preprocessing["medians"]
-        means = preprocessing["means"]
-        scales = preprocessing["scales"]
-
-    device = _resolve_device(device_name)
-    groups = checkpoint["feature_groups"]
-    model = MultilabelGOModel(
-        groups,
-        n_terms=len(terms),
-        trunk_dim=checkpoint["trunk_dim"],
-        bottleneck_dim=checkpoint["bottleneck_dim"],
-        branch_dropout=checkpoint["branch_dropout"],
-        trunk_dropout=checkpoint["trunk_dropout"],
-        projection_dims=checkpoint.get("projection_dims"),
-        promoter_fusion_dim=checkpoint.get("promoter_fusion_dim", PROMOTER_FUSION_DIM),
-        trunk_layers=checkpoint.get("trunk_layers", 2),
-    )
-    model.load_state_dict(checkpoint["model_state_dict"])
-    model.to(device).eval()
 
     # Checkpoints trained without ESM-2 take their protein set from the protein features and
     # zero-fill missing promoters, mirroring training.
