@@ -27,9 +27,9 @@ from pathlib import Path
 
 import pandas as pd
 
-from modeling.evaluate_cafa6 import METRICS, REGIMES, official_roc_auc, run_cafaeval, summarize
+from modeling.evaluation.official import METRICS, REGIMES, official_roc_auc, run_cafaeval, summarize
 
-LOGGER = logging.getLogger("cafa6.modeling.ablation")
+LOGGER = logging.getLogger("cafa6.modeling.experiments.ablation")
 DEFAULT_ROOT = Path("data/ablation")
 DEFAULT_RELEASE_DIR = Path("data/evaluation/release_kaggle_final_May2026")
 
@@ -85,7 +85,7 @@ def run_dir(root: Path, sweep: str, config: str, seed: int) -> Path:
 
 def train_command(config: AblationConfig, seed: int, directory: Path, smoke: bool) -> list[str]:
     command = [
-        sys.executable, "-m", "modeling.train_multilabel_nn",
+        sys.executable, "-m", "modeling.nn.train",
         *COMMON_TRAIN_FLAGS,
         *config.flags,
         "--random-state", str(seed),
@@ -115,7 +115,7 @@ def train_and_predict(config: AblationConfig, seed: int, root: Path, sweep: str,
     predictions = predictions_dir / f"{config.name}_seed{seed}.tsv"
     if not predictions.exists():
         truth_files = [str(release_dir / f"May2026_groundtruth_{regime}.tsv") for regime in REGIMES]
-        command = [sys.executable, "-m", "modeling.predict_multilabel_nn", str(model_dir), "--output", str(predictions), "--protein-ids", *truth_files]
+        command = [sys.executable, "-m", "modeling.nn.predict", str(model_dir), "--output", str(predictions), "--protein-ids", *truth_files]
         _run_logged(command, directory / "logs" / "predict.log")
     return directory
 
@@ -235,7 +235,7 @@ def main() -> None:
             score_cafaeval(directory, args.release_dir, args.threads)
             LOGGER.info("cafaeval scored %s", directory)
     elif args.command == "significance":
-        from modeling.significance import compare_to_reference
+        from modeling.evaluation.significance import compare_to_reference
 
         others = [name for name in CONFIGS if name != args.reference and (args.root / args.sweep / name).exists()]
         table = compare_to_reference(args.root / args.sweep, args.reference, others, args.release_dir, args.n_bootstrap)
@@ -243,7 +243,7 @@ def main() -> None:
         table.round(6).to_csv(args.out, index=False)
         LOGGER.info("wrote %s", args.out)
     else:
-        from modeling.ablation_report import write_report
+        from modeling.experiments.ablation_report import write_report
 
         write_report(args.root / args.sweep, args.out, args.release_dir)
 

@@ -1,4 +1,4 @@
-"""Tables and figures for a finished feature-group ablation sweep (see modeling.ablation).
+"""Tables and figures for a finished feature-group ablation sweep (see modeling.experiments.ablation).
 
 Writes to `results/`:
     summary/runs.csv             one row per config x seed with every metric
@@ -6,7 +6,7 @@ Writes to `results/`:
     summary/deltas.csv           paired (same-seed) differences for each feature-group comparison
     summary/promoter_strata.csv  promoter effect by promoter provenance and kingdom
     summary/cafaeval.csv         official CAFA evaluator scores, for runs where it was run
-    summary/response_terms.csv   do promoters help "response to" GO terms more? (see modeling.term_groups)
+    summary/response_terms.csv   do promoters help "response to" GO terms more? (see modeling.experiments.term_groups)
     summary/response_term_deltas.csv  per-term AUC change from adding promoters
     summary/*.png                metric_by_config, delta_heatmap, promoter_strata
     <config>/                    config.json, metrics.csv, per_term_auc.csv, training_curves.png, pr_curves.png
@@ -28,11 +28,11 @@ import pandas as pd
 from matplotlib.colors import LinearSegmentedColormap
 from scipy.stats import ttest_1samp
 
-from modeling.ablation import COMMON_TRAIN_FLAGS, COMPARISONS, CONFIGS, collect_run
-from modeling.go_evaluation import GeneOntology, build_truth_ia_totals, cafa_fmax, load_ia_weights
-from modeling.term_groups import response_term_analysis
+from modeling.experiments.ablation import COMMON_TRAIN_FLAGS, COMPARISONS, CONFIGS, collect_run
+from modeling.evaluation.go import GeneOntology, build_truth_ia_totals, cafa_fmax, load_ia_weights
+from modeling.experiments.term_groups import response_term_analysis
 
-LOGGER = logging.getLogger("cafa6.modeling.ablation_report")
+LOGGER = logging.getLogger("cafa6.modeling.experiments.ablation_report")
 HEADLINE_METRICS = {
     "internal_macro_roc_auc": "Internal macro ROC-AUC",
     "internal_micro_roc_auc": "Internal micro ROC-AUC",

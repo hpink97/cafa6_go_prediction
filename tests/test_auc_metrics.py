@@ -7,8 +7,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from modeling.evaluate_cafa6 import official_roc_auc
-from modeling.go_evaluation import roc_auc_summary
+from modeling.evaluation.official import official_roc_auc
+from modeling.evaluation.go import roc_auc_summary
 
 OBO = """format-version: 1.2
 

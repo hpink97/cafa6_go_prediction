@@ -32,7 +32,7 @@ from modeling.data import (
     make_train_test_split,
     select_top_terms,
 )
-from modeling.go_evaluation import (
+from modeling.evaluation.go import (
     NAMESPACE_TO_ASPECT,
     GeneOntology,
     build_closed_label_matrix,
@@ -42,7 +42,16 @@ from modeling.go_evaluation import (
     load_ia_weights,
     roc_auc_summary,
 )
-from modeling.score_channels import (
+from modeling.nn.ensemble import apply_channel_selection, evaluate_cafa_predictions, tune_channel_by_aspect
+from modeling.nn.model import (
+    DEFAULT_PROJECTION_DIMS,
+    PROMOTER_FUSION_DIM,
+    MultilabelGOModel,
+    feature_group_indices,
+    make_loss,
+    resolve_device,
+)
+from modeling.nn.score_channels import (
     blend_scores_by_aspect,
     exact_cosine_neighbors,
     fit_taxon_prior,
@@ -54,14 +63,6 @@ from modeling.score_channels import (
 
 LOGGER = logging.getLogger("cafa6.modeling.multilabel_nn")
 
-DEFAULT_PROJECTION_DIMS = {
-    "esm2": 256,
-    "promoter_nt": 128,
-    "promoter_agront": 128,
-    "manual_taxonomy": 32,
-}
-PROMOTER_FUSION_DIM = 128
-
 
 def _set_random_seed(random_state: int) -> None:
     random.seed(random_state)
@@ -69,164 +70,6 @@ def _set_random_seed(random_state: int) -> None:
     torch.manual_seed(random_state)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(random_state)
-
-
-def _resolve_device(requested: str) -> torch.device:
-    if requested != "auto":
-        return torch.device(requested)
-    if torch.cuda.is_available():
-        return torch.device("cuda")
-    if torch.backends.mps.is_available():
-        return torch.device("mps")
-    return torch.device("cpu")
-
-
-def _feature_groups(feature_names: list[str]) -> dict[str, list[int]]:
-    groups = {name: [] for name in DEFAULT_PROJECTION_DIMS}
-    for index, feature_name in enumerate(feature_names):
-        if feature_name.startswith("esm2_"):
-            group = "esm2"
-        elif feature_name.startswith("promoter_nt_"):
-            group = "promoter_nt"
-        elif feature_name.startswith("promoter_agront_"):
-            group = "promoter_agront"
-        else:
-            group = "manual_taxonomy"
-        groups[group].append(index)
-    return {name: indices for name, indices in groups.items() if indices}
-
-
-class MultilabelGOModel(nn.Module):
-    """Project each feature modality, then share a compact prediction trunk."""
-
-    def __init__(
-        self,
-        feature_groups: dict[str, list[int]],
-        n_terms: int,
-        trunk_dim: int = 512,
-        bottleneck_dim: int = 256,
-        branch_dropout: float = 0.1,
-        trunk_dropout: float = 0.2,
-        projection_dims: dict[str, int] | None = None,
-        promoter_fusion_dim: int = PROMOTER_FUSION_DIM,
-        trunk_layers: int = 2,
-    ) -> None:
-        super().__init__()
-        if trunk_layers < 2:
-            raise ValueError("trunk_layers must be at least 2 (input and bottleneck layers)")
-        projection_dims = {**DEFAULT_PROJECTION_DIMS, **(projection_dims or {})}
-        self.group_names = tuple(feature_groups)
-        self.promoter_group_names = tuple(name for name in self.group_names if name.startswith("promoter_"))
-        self.non_promoter_group_names = tuple(name for name in self.group_names if not name.startswith("promoter_"))
-        self.branches = nn.ModuleDict()
-        non_promoter_dim = 0
-        promoter_dim = 0
-
-        for group_name, indices in feature_groups.items():
-            projection_dim = projection_dims[group_name]
-            buffer_name = f"{group_name}_indices"
-            self.register_buffer(buffer_name, torch.tensor(indices, dtype=torch.long), persistent=False)
-            self.branches[group_name] = nn.Sequential(
-                nn.LayerNorm(len(indices)),
-                nn.Linear(len(indices), projection_dim),
-                nn.GELU(),
-                nn.Dropout(branch_dropout),
-            )
-            if group_name.startswith("promoter_"):
-                promoter_dim += projection_dim
-            else:
-                non_promoter_dim += projection_dim
-
-        self.promoter_fusion: nn.Module | None = None
-        if promoter_dim:
-            self.promoter_fusion = nn.Sequential(
-                nn.Linear(promoter_dim, promoter_fusion_dim),
-                nn.GELU(),
-                nn.Dropout(branch_dropout),
-            )
-        fused_dim = non_promoter_dim + (promoter_fusion_dim if promoter_dim else 0)
-
-        # Two layers keep the original module layout, so older checkpoints still load.
-        widths = [fused_dim] + [trunk_dim] * (trunk_layers - 1) + [bottleneck_dim]
-        trunk: list[nn.Module] = []
-        for in_dim, out_dim in zip(widths[:-1], widths[1:]):
-            trunk += [nn.Linear(in_dim, out_dim), nn.GELU(), nn.Dropout(trunk_dropout)]
-        self.trunk = nn.Sequential(*trunk)
-        self.classifier = nn.Linear(bottleneck_dim, n_terms)
-
-    def forward(self, features: torch.Tensor) -> torch.Tensor:
-        projected = {}
-        for group_name in self.group_names:
-            group_features = features.index_select(1, getattr(self, f"{group_name}_indices"))
-            group_projection = self.branches[group_name](group_features)
-            if group_name == "promoter_agront":
-                is_applicable = group_features.abs().sum(dim=1, keepdim=True) > 0
-                group_projection = group_projection * is_applicable
-            projected[group_name] = group_projection
-
-        fused = [projected[group_name] for group_name in self.non_promoter_group_names]
-        if self.promoter_fusion is not None:
-            promoter_features = torch.cat(
-                [projected[group_name] for group_name in self.promoter_group_names],
-                dim=1,
-            )
-            fused.append(self.promoter_fusion(promoter_features))
-        return self.classifier(self.trunk(torch.cat(fused, dim=1)))
-
-
-class AsymmetricLoss(nn.Module):
-    """Asymmetric focal loss for highly imbalanced multi-label targets."""
-
-    def __init__(self, gamma_negative: float = 4.0, gamma_positive: float = 0.0, clip: float = 0.05) -> None:
-        super().__init__()
-        self.gamma_negative = gamma_negative
-        self.gamma_positive = gamma_positive
-        self.clip = clip
-
-    def forward(self, logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-        probabilities = torch.sigmoid(logits)
-        positive_loss = targets * torch.log(probabilities.clamp_min(1e-8))
-        if self.gamma_positive:
-            positive_loss *= (1.0 - probabilities).pow(self.gamma_positive)
-
-        negative_probabilities = 1.0 - probabilities
-        if self.clip:
-            negative_probabilities = (negative_probabilities + self.clip).clamp(max=1.0)
-        negative_loss = (1.0 - targets) * torch.log(negative_probabilities.clamp_min(1e-8))
-        if self.gamma_negative:
-            negative_loss *= (1.0 - negative_probabilities).pow(self.gamma_negative)
-        return -(positive_loss + negative_loss).mean()
-
-
-def _make_loss(
-    loss_name: str,
-    y_train: np.ndarray,
-    max_pos_weight: float,
-    gamma_negative: float,
-    gamma_positive: float,
-    asymmetric_clip: float,
-    device: torch.device,
-) -> tuple[nn.Module, np.ndarray]:
-    positive_counts = y_train.sum(axis=0, dtype=np.int64)
-    negative_counts = len(y_train) - positive_counts
-    pos_weights = np.ones(y_train.shape[1], dtype=np.float32)
-    has_positives = positive_counts > 0
-    pos_weights[has_positives] = np.sqrt(negative_counts[has_positives] / positive_counts[has_positives])
-    pos_weights = np.clip(pos_weights, 1.0, max_pos_weight)
-
-    if loss_name == "bce":
-        criterion: nn.Module = nn.BCEWithLogitsLoss()
-    elif loss_name == "weighted_bce":
-        criterion = nn.BCEWithLogitsLoss(pos_weight=torch.from_numpy(pos_weights).to(device))
-    elif loss_name == "asymmetric":
-        criterion = AsymmetricLoss(
-            gamma_negative=gamma_negative,
-            gamma_positive=gamma_positive,
-            clip=asymmetric_clip,
-        )
-    else:
-        raise ValueError(f"Unknown loss {loss_name!r}")
-    return criterion, pos_weights
 
 
 def _limit_ids(ids: np.ndarray, max_samples: int | None, random_state: int) -> np.ndarray:
@@ -373,109 +216,6 @@ def _classification_metrics(
     return summary, per_term
 
 
-def _evaluate_cafa_predictions(
-    targets: np.ndarray,
-    probabilities: np.ndarray,
-    terms: list[str],
-    ontology: GeneOntology,
-    ia_weights: dict[str, float],
-    truth_ia_totals: dict[str, np.ndarray],
-    threshold_step: float,
-    max_predictions: int,
-    include_aspects: set[str] | None = None,
-) -> tuple[dict[str, float | int], pd.DataFrame, np.ndarray]:
-    propagated = ontology.propagate_scores(
-        limit_top_predictions(probabilities, max_predictions),
-        terms,
-        copy=False,
-    )
-    summary, curve = cafa_fmax(
-        targets,
-        propagated,
-        terms,
-        ontology,
-        ia_weights,
-        truth_ia_totals=truth_ia_totals,
-        threshold_step=threshold_step,
-        propagate=False,
-        include_aspects=include_aspects,
-    )
-    return summary, curve, propagated
-
-
-def _apply_channel_selection(
-    base_scores: np.ndarray,
-    channel_variants: dict[str, np.ndarray],
-    aspects: np.ndarray,
-    selection: dict[str, dict[str, float | str]],
-) -> tuple[np.ndarray, np.ndarray]:
-    blended = base_scores.copy()
-    selected_channel = np.zeros_like(base_scores)
-    for aspect, settings in selection.items():
-        columns = aspects == aspect
-        variant = str(settings["variant"])
-        weight = float(settings["weight"])
-        channel = channel_variants[variant]
-        blended[:, columns] = (
-            (1.0 - weight) * blended[:, columns]
-            + weight * channel[:, columns]
-        )
-        selected_channel[:, columns] = channel[:, columns]
-    return blended, selected_channel
-
-
-def _tune_channel_by_aspect(
-    base_scores: np.ndarray,
-    channel_variants: dict[str, np.ndarray],
-    aspects: np.ndarray,
-    targets: np.ndarray,
-    terms: list[str],
-    ontology: GeneOntology,
-    ia_weights: dict[str, float],
-    truth_ia_totals: dict[str, np.ndarray],
-    threshold_step: float,
-    max_predictions: int,
-    weight_step: float,
-    max_channel_weight: float,
-) -> dict[str, dict[str, float | str]]:
-    if not 0.0 < weight_step <= 1.0:
-        raise ValueError("ensemble_weight_step must be in (0, 1]")
-    if not 0.0 <= max_channel_weight <= 1.0:
-        raise ValueError("ensemble_max_channel_weight must be in [0, 1]")
-    weights = np.arange(0.0, max_channel_weight + weight_step / 2.0, weight_step)
-    best = {
-        aspect: {"variant": next(iter(channel_variants)), "weight": 0.0, "validation_fmax": -np.inf}
-        for aspect in ("P", "F", "C")
-    }
-    for variant, channel_scores in channel_variants.items():
-        for weight in weights:
-            candidate = blend_scores_by_aspect(
-                base_scores,
-                channel_scores,
-                aspects,
-                {aspect: float(weight) for aspect in ("P", "F", "C")},
-            )
-            summary, _, _ = _evaluate_cafa_predictions(
-                targets,
-                candidate,
-                terms,
-                ontology,
-                ia_weights,
-                truth_ia_totals,
-                threshold_step,
-                max_predictions,
-            )
-            for aspect in ("P", "F", "C"):
-                aspect_score = float(summary[f"cafa_fmax_{aspect}"])
-                if aspect_score > float(best[aspect]["validation_fmax"]):
-                    best[aspect] = {
-                        "variant": variant,
-                        "weight": float(weight),
-                        "validation_fmax": aspect_score,
-                    }
-    return best
-
-
 def _save_predictions(
     path: Path,
     protein_ids: np.ndarray,
@@ -566,7 +306,7 @@ def run(
     inference_dir.mkdir(exist_ok=True)
 
     _set_random_seed(random_state)
-    device = _resolve_device(device_name)
+    device = resolve_device(device_name)
     LOGGER.info("using device %s", device)
     ontology = GeneOntology.from_obo(go_obo_path)
     ia_weights = load_ia_weights(ia_path)
@@ -668,7 +408,7 @@ def run(
     )
 
     feature_names = list(features.columns)
-    groups = _feature_groups(feature_names)
+    groups = feature_group_indices(feature_names)
     LOGGER.info("feature groups: %s", {name: len(indices) for name, indices in groups.items()})
     x_train, y_train = _extract_arrays(features, labels, train_ids)
     x_validation, y_validation = _extract_arrays(features, labels, validation_ids)
@@ -767,7 +507,7 @@ def run(
         promoter_fusion_dim=promoter_fusion_dim,
         trunk_layers=trunk_layers,
     ).to(device)
-    criterion, pos_weights = _make_loss(
+    criterion, pos_weights = make_loss(
         loss_name,
         y_train,
         max_pos_weight,
@@ -884,7 +624,7 @@ def run(
     test_nn_summary: dict[str, float | int] = {}
     if has_test:
         test_loss, test_probabilities, test_targets = _predict(model, test_loader, criterion, device)
-    validation_nn_cafa, validation_nn_cafa_curve, propagated_validation_probabilities = _evaluate_cafa_predictions(
+    validation_nn_cafa, validation_nn_cafa_curve, propagated_validation_probabilities = evaluate_cafa_predictions(
         validation_targets,
         validation_probabilities,
         terms,
@@ -895,7 +635,7 @@ def run(
         max_predictions_per_protein,
     )
     if has_test:
-        test_nn_cafa, test_nn_cafa_curve, propagated_test_probabilities = _evaluate_cafa_predictions(
+        test_nn_cafa, test_nn_cafa_curve, propagated_test_probabilities = evaluate_cafa_predictions(
             test_targets,
             test_probabilities,
             terms,
@@ -927,7 +667,7 @@ def run(
     ensemble_config: dict[str, object] = {}
 
     if validation_taxon_scores is not None:
-        taxon_selection = _tune_channel_by_aspect(
+        taxon_selection = tune_channel_by_aspect(
             validation_ensemble_probabilities,
             {"taxon_prior": validation_taxon_scores},
             aspects,
@@ -941,13 +681,13 @@ def run(
             ensemble_weight_step,
             ensemble_max_channel_weight,
         )
-        validation_ensemble_probabilities, _ = _apply_channel_selection(
+        validation_ensemble_probabilities, _ = apply_channel_selection(
             validation_ensemble_probabilities,
             {"taxon_prior": validation_taxon_scores},
             aspects,
             taxon_selection,
         )
-        test_ensemble_probabilities, _ = _apply_channel_selection(
+        test_ensemble_probabilities, _ = apply_channel_selection(
             test_ensemble_probabilities,
             {"taxon_prior": test_taxon_scores},
             aspects,
@@ -994,7 +734,7 @@ def run(
             )
             for k in k_values
         }
-        knn_selection = _tune_channel_by_aspect(
+        knn_selection = tune_channel_by_aspect(
             validation_ensemble_probabilities,
             validation_knn_variants,
             aspects,
@@ -1008,7 +748,7 @@ def run(
             ensemble_weight_step,
             ensemble_max_channel_weight,
         )
-        validation_ensemble_probabilities, selected_validation_knn = _apply_channel_selection(
+        validation_ensemble_probabilities, selected_validation_knn = apply_channel_selection(
             validation_ensemble_probabilities,
             validation_knn_variants,
             aspects,
@@ -1032,7 +772,7 @@ def run(
                 )
                 for k in selected_k_values
             }
-            test_ensemble_probabilities, selected_test_knn = _apply_channel_selection(
+            test_ensemble_probabilities, selected_test_knn = apply_channel_selection(
                 test_ensemble_probabilities,
                 test_knn_variants,
                 aspects,
@@ -1045,7 +785,7 @@ def run(
         del validation_knn_variants, neighbor_similarities, neighbor_indices
         gc.collect()
 
-    validation_cafa, validation_cafa_curve, propagated_validation_ensemble = _evaluate_cafa_predictions(
+    validation_cafa, validation_cafa_curve, propagated_validation_ensemble = evaluate_cafa_predictions(
         validation_targets,
         validation_ensemble_probabilities,
         terms,
@@ -1057,7 +797,7 @@ def run(
     )
     test_summary: dict[str, float | int] = {}
     if has_test:
-        test_cafa, test_cafa_curve, propagated_test_ensemble = _evaluate_cafa_predictions(
+        test_cafa, test_cafa_curve, propagated_test_ensemble = evaluate_cafa_predictions(
             test_targets,
             test_ensemble_probabilities,
             terms,

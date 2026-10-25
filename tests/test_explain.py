@@ -10,10 +10,10 @@ import shap
 import torch
 from torch import nn
 
-from modeling.explain import ExplainData, TermLogit, feature_groups, permutation_importance
-from modeling.explain_report import _auc, _known_feature, pretty_feature
-from modeling.predict_multilabel_nn import TrainedModel
-from modeling.train_multilabel_nn import MultilabelGOModel
+from modeling.explain.attribution import ExplainData, TermLogit, feature_groups, permutation_importance
+from modeling.explain.report import _auc, _known_feature, pretty_feature
+from modeling.nn.predict import TrainedModel
+from modeling.nn.model import MultilabelGOModel
 
 OBO = """format-version: 1.2
 

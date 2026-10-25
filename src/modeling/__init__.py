@@ -1,1 +1,1 @@
-"""Per GO-term XGBoost baseline pipelines."""
+"""Model training, evaluation, experiments and explainability for CAFA6 GO-term prediction."""

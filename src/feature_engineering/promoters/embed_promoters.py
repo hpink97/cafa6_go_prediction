@@ -203,7 +203,7 @@ def generate_promoter_embeddings(
     if embed_species is not None or embed_kingdoms is not None:
         selected = np.isin(species_list, list(embed_species or []))
         if embed_kingdoms:
-            from feature_engineering.taxonomy import classify_kingdoms
+            from feature_engineering.sequence.taxonomy import classify_kingdoms
 
             taxa = sequences["taxon_id"].astype(str).tolist()
             kingdom_by_taxon = classify_kingdoms(sorted(set(taxa)))

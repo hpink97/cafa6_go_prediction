@@ -18,13 +18,14 @@ import numpy as np
 import pandas as pd
 import torch
 
-from feature_engineering.taxonomy import classify_kingdoms, encode_kingdom, encode_taxonomy, load_taxonomy
+from feature_engineering.sequence.taxonomy import classify_kingdoms, encode_kingdom, encode_taxonomy, load_taxonomy
 from modeling.data import PLANT_SPECIFIC_PROMOTER_PREFIX, PromoterImputer, load_protein_feature_table
-from modeling.go_evaluation import NAMESPACE_TO_ASPECT, GeneOntology, limit_top_predictions
-from modeling.score_channels import exact_cosine_neighbors, knn_annotation_scores, load_taxon_prior
-from modeling.train_multilabel_nn import PROMOTER_FUSION_DIM, MultilabelGOModel, _apply_channel_selection, _resolve_device
+from modeling.evaluation.go import NAMESPACE_TO_ASPECT, GeneOntology, limit_top_predictions
+from modeling.nn.score_channels import exact_cosine_neighbors, knn_annotation_scores, load_taxon_prior
+from modeling.nn.ensemble import apply_channel_selection
+from modeling.nn.model import PROMOTER_FUSION_DIM, MultilabelGOModel, resolve_device
 
-LOGGER = logging.getLogger("cafa6.modeling.predict_multilabel_nn")
+LOGGER = logging.getLogger("cafa6.modeling.nn.predict")
 PROMOTER_PREFIXES = ("promoter_nt", PLANT_SPECIFIC_PROMOTER_PREFIX)
 
 
@@ -128,7 +129,7 @@ def run(
 ) -> None:
     config = json.loads((model_dir / "run_config.json").read_text())
     ensemble_config = json.loads((model_dir / "ensemble_config.json").read_text())
-    device = _resolve_device(device_name)
+    device = resolve_device(device_name)
     trained = load_trained_model(model_dir, device)
     model, terms, feature_names = trained.model, trained.terms, trained.feature_names
     medians, means, scales = trained.medians, trained.means, trained.scales
@@ -232,7 +233,7 @@ def run(
                 scores = torch.sigmoid(model(torch.from_numpy(x).to(device))).cpu().numpy().astype(np.float32)
             if taxon_prior is not None:
                 prior_scores = taxon_prior.predict(np.asarray(batch_ids), taxon_by_protein)
-                scores, _ = _apply_channel_selection(scores, {"taxon_prior": prior_scores}, aspects, ensemble_config["taxon_prior"])
+                scores, _ = apply_channel_selection(scores, {"taxon_prior": prior_scores}, aspects, ensemble_config["taxon_prior"])
             if knn_selection:
                 similarities, indices = exact_cosine_neighbors(
                     donor_embeddings, esm2_values, knn_k_values[-1], device=knn_device_name, query_batch_size=knn_query_batch_size
@@ -243,7 +244,7 @@ def run(
                     )
                     for k in knn_k_values
                 }
-                scores, _ = _apply_channel_selection(scores, variants, aspects, knn_selection)
+                scores, _ = apply_channel_selection(scores, variants, aspects, knn_selection)
 
             limited = limit_top_predictions(scores, config["max_predictions_per_protein"])
             propagated = ontology.propagate_scores(limited, terms, copy=False)

@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 
 from modeling.data import build_feature_table
-from modeling.train_multilabel_nn import resolve_feature_inputs
+from modeling.nn.train import resolve_feature_inputs
 
 
 def _write_embeddings(path: Path, protein_ids: list[str], dim: int) -> None:

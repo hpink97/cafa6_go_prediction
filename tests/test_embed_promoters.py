@@ -42,7 +42,7 @@ class EmbedKingdomSelectionTest(unittest.TestCase):
                 patch.object(embed_promoters.AutoTokenizer, "from_pretrained", return_value=object()),
                 patch.object(embed_promoters.AutoModelForMaskedLM, "from_pretrained", return_value=_FakeModel()),
                 patch.object(embed_promoters, "_embed_batch", side_effect=_fake_embed),
-                patch("feature_engineering.taxonomy.classify_kingdoms", return_value=kingdoms),
+                patch("feature_engineering.sequence.taxonomy.classify_kingdoms", return_value=kingdoms),
             ):
                 embed_promoters.generate_promoter_embeddings(
                     promoters, root / "out", model_name="fake", device_name="cpu", embed_species=["arabidopsis_thaliana"]

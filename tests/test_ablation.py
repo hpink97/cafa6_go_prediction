@@ -8,9 +8,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from modeling.ablation import CONFIGS, select_runs, train_command
-from modeling.ablation_report import write_report
-from modeling.evaluate_cafa6 import METRICS, REGIMES
+from modeling.experiments.ablation import CONFIGS, select_runs, train_command
+from modeling.experiments.ablation_report import write_report
+from modeling.evaluation.official import METRICS, REGIMES
 
 
 def _write_fake_run(directory: Path, quality: float, cafaeval: bool = True) -> None:

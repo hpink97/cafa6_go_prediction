@@ -26,9 +26,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from modeling.ablation import COMMON_TRAIN_FLAGS, CONFIGS, DEFAULT_RELEASE_DIR, _run_logged, score_auc
+from modeling.experiments.ablation import COMMON_TRAIN_FLAGS, CONFIGS, DEFAULT_RELEASE_DIR, _run_logged, score_auc
 
-LOGGER = logging.getLogger("cafa6.modeling.hparam_search")
+LOGGER = logging.getLogger("cafa6.modeling.experiments.hparam_search")
 DEFAULT_ROOT = Path("data/hparams")
 SELECTION_METRIC = "validation_nn_cafa_fmax_mean"
 SEARCH_SPACE = {
@@ -106,7 +106,7 @@ def train_trial(
     (directory.parent / "trial.json").write_text(json.dumps({"features": features, **trial}, indent=2) + "\n")
     if not (directory / "model" / "summary.json").exists():
         command = [
-            sys.executable, "-m", "modeling.train_multilabel_nn",
+            sys.executable, "-m", "modeling.nn.train",
             *COMMON_TRAIN_FLAGS, *CONFIGS[features].flags, *trial_flags(trial),
             "--random-state", str(seed),
             "--output-dir", str(directory / "model"),
@@ -118,7 +118,7 @@ def train_trial(
     predictions = directory / "predictions" / f"{directory.parent.name}_seed{seed}.tsv"
     if not predictions.exists():
         truth_files = [str(release_dir / f"May2026_groundtruth_{regime}.tsv") for regime in ("NK", "LK", "PK")]
-        command = [sys.executable, "-m", "modeling.predict_multilabel_nn", str(directory / "model"), "--output", str(predictions), "--protein-ids", *truth_files]
+        command = [sys.executable, "-m", "modeling.nn.predict", str(directory / "model"), "--output", str(predictions), "--protein-ids", *truth_files]
         _run_logged(command, directory / "logs" / "predict.log")
     return score_auc(directory, release_dir)
 

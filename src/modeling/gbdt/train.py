@@ -31,7 +31,7 @@ from modeling.data import (
     make_train_test_split,
     select_top_terms,
 )
-from modeling.pipeline import FEATURE_SELECTION_METHODS, build_pipeline, default_param_grid
+from modeling.gbdt.pipeline import FEATURE_SELECTION_METHODS, build_pipeline, default_param_grid
 
 LOGGER = logging.getLogger("cafa6.modeling")
 
