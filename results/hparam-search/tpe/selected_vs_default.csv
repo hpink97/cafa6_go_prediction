@@ -1,0 +1,5 @@
+metric,default_mean,selected_mean,delta_mean,delta_sd,n_seeds_improved,n_seeds
+Validation IA-weighted Fmax (selection),0.457752,0.534139,0.076386,0.002567,3,3
+Test IA-weighted Fmax,0.456649,0.531849,0.0752,0.003211,3,3
+Test macro ROC-AUC,0.906107,0.911355,0.005248,0.003445,3,3
+Official macro ROC-AUC,0.850179,0.864084,0.013905,0.001928,3,3

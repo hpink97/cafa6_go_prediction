@@ -10,38 +10,44 @@ evaluator.
 <!-- results:start -->
 ## Results
 
-Six feature configurations and a 24-trial architecture search were run, each final model on 3
-seeds. Every model was scored on a random 20% holdout and with the official CAFA evaluator on the
+Six feature configurations were compared, then two architecture searches were run: random (24
+trials) and Bayesian (122 trials). Each final model was trained on 3 seeds. Every model was
+scored on a random 20% holdout and with the official CAFA evaluator on the
 [CAFA6 final release](https://doi.org/10.6084/m9.figshare.32861969) (8,023 proteins annotated
 after training).
 
+- **Best model: official weighted Fmax 0.361**, against 0.326 for the best model before the
+  Bayesian search (+0.033 [0.025, 0.040], p = 0.001, paired protein bootstrap).
+  - The gain comes mostly from training choices: an asymmetric loss instead of class-weighted
+    BCE, a cosine learning-rate schedule, and wider layers.
+- **The multi-label network beats per-term XGBoost:** +0.034 macro ROC-AUC on the same features,
+  terms and labels (first-search architecture), with the largest gains on rare terms.
 - **ESM-2 carries the signal:** +0.065 official weighted Fmax over handcrafted + kingdom features
   alone (p < 0.001).
-- **Promoter DNA embeddings help ranking but hurt the official score.**
-  - They raise per-term ROC-AUC on every seed.
-  - On the CAFA6 targets the promoter model is significantly *worse* than every ESM-2 model
-    without promoters: −0.010 to −0.014 weighted Fmax, p ≤ 0.006, paired protein bootstrap.
-  - Promoter coverage is much patchier for those targets than for training proteins.
+- **Promoter DNA embeddings: whether they help depends on the training recipe.**
+  - With the default recipe they raise per-term ROC-AUC but *lower* the official score
+    (−0.010 to −0.014 weighted Fmax, p ≤ 0.006).
+  - With the tuned recipe they raise it (+0.009, p = 0.012).
+  - Promoter coverage is much patchier for the CAFA6 targets than for training proteins.
 - **Promoters help "response to …" GO terms most,** as hypothesised for expression-driven
   processes: twice the gain of other processes without ESM-2 (p = 0.0001). Most of that signal
   is already captured by ESM-2.
-- **A random holdout would have picked the wrong model.** The best internal models include
-  promoters. The best model on the official targets is a wider network on ESM-2 + handcrafted +
-  kingdom features without promoters: weighted Fmax **0.326**, against 0.313 for the default
-  architecture with all features.
+- **A random holdout can mislead.** After the first search, the internal holdout favoured a
+  promoter model that the official targets ranked below the no-promoter one.
 
 ![Internal holdout vs official CAFA6 score for each model](results/summary/internal_vs_official.png)
 
-| Architecture | Features | Official weighted Fmax | Official macro AUC | Internal Fmax |
+| Model | Features | Official weighted Fmax | Official macro AUC | Internal Fmax |
 |---|---|---|---|---|
-| default | ESM-2 | 0.319 ± 0.006 | 0.838 ± 0.003 | 0.451 ± 0.002 |
-| default | ESM-2 + handcrafted + kingdom | 0.321 ± 0.003 | 0.844 ± 0.006 | 0.457 ± 0.002 |
-| default | + promoters | 0.313 ± 0.002 | **0.850 ± 0.002** | 0.457 ± 0.001 |
-| wider (search) | + promoters | 0.321 ± 0.004 | **0.850 ± 0.008** | **0.467 ± 0.004** |
-| **wider (search)** | **ESM-2 + handcrafted + kingdom** | **0.326 ± 0.008** | 0.844 ± 0.003 | 0.464 ± 0.002 |
+| default architecture | ESM-2 | 0.319 ± 0.006 | 0.838 ± 0.003 | 0.451 ± 0.002 |
+| default architecture | ESM-2 + handcrafted + kingdom | 0.321 ± 0.003 | 0.844 ± 0.006 | 0.457 ± 0.002 |
+| default architecture | + promoters | 0.313 ± 0.002 | 0.850 ± 0.002 | 0.457 ± 0.001 |
+| random search (wider) | + promoters | 0.321 ± 0.004 | 0.850 ± 0.008 | 0.467 ± 0.004 |
+| random search (wider) | ESM-2 + handcrafted + kingdom | 0.326 ± 0.008 | 0.844 ± 0.003 | 0.464 ± 0.002 |
+| Bayesian search (asymmetric loss) | ESM-2 + handcrafted + kingdom | 0.354 ± 0.004 | 0.852 ± 0.005 | 0.525 ± 0.001 |
+| **Bayesian search (asymmetric loss)** | **+ promoters** | **0.361 ± 0.003** | **0.864 ± 0.003** | **0.532 ± 0.003** |
 
-Values are mean ± sd over 3 seeds. In the protein bootstrap the last row beats rows 2–4 on
-official weighted Fmax (p = 0.001–0.042).
+Values are mean ± sd over 3 seeds.
 
 ![Per-term AUC gain from promoters: response terms vs other processes](results/summary/response_terms.png)
 
@@ -63,8 +69,10 @@ official weighted Fmax (p = 0.001–0.042).
 **Full write-ups:**
 - [**Feature ablation**](results/feature-ablation.md): every feature group, the statistics,
   "do promoters help?" and the response-term analysis.
-- [**Architecture search and final model**](results/hparam-search/README.md): 24 trials and the
-  architecture × promoter comparison.
+- [**Architecture search and final model**](results/hparam-search/README.md): random search,
+  then Bayesian optimisation (Optuna TPE + Hyperband pruning), and the final comparison.
+- [**XGBoost baseline**](results/xgboost-baseline/README.md): the network against one XGBoost
+  classifier per GO term, by aspect, term frequency and input group.
 - [**Explainability**](results/explainability/README.md): SHAP across all 2,180 GO terms,
   deep dives, ESM-2 dimensions, and maps of proteins and GO terms.
 <!-- results:end -->
@@ -111,7 +119,11 @@ ESM-2 space.
 **Model.**
 - One projection per feature group feeds a shared MLP that predicts the 1,000 most frequent
   terms plus all their ancestors.
-- Training uses class-weighted BCE, with early stopping on IA-weighted CAFA Fmax.
+- Training uses early stopping on validation IA-weighted CAFA Fmax.
+  - The trainer defaults to class-weighted BCE and a constant learning rate.
+  - The best model, from the Bayesian search, uses an asymmetric loss (γ⁻ 2, γ⁺ 1, clip 0.1), a
+    cosine learning-rate schedule and a 2048-wide trunk and bottleneck
+    ([selected settings](results/hparam-search/tpe/selected.json)).
 - Predictions are propagated up the ontology before scoring.
 - Two optional score channels can be blended in per aspect: an exact-taxon prior and ESM-2
   nearest-neighbour label transfer.
@@ -159,6 +171,7 @@ uv run cafa6-ablation report --sweep feature-groups        # tables and figures 
 uv run cafa6-hparam-search run --sweep arch --features all --trials 24   # architecture search
 uv run cafa6-hparam-search finalize --sweep arch                         # selected trial on seeds 1-2
 uv run cafa6-hparam-search report --sweep arch                           # -> results/hparam-search/
+# Bayesian search (Optuna TPE + Hyperband) and its final comparison: see results/hparam-search/README.md
 uv run python scripts/plot_summary_figure.py                             # headline figure above
 ```
 
@@ -183,7 +196,7 @@ src/modeling/
   nn/                      multi-label network: model, training, score-channel blending, prediction
   gbdt/                    per-GO-term XGBoost baseline
   evaluation/              ontology propagation, CAFA Fmax / ROC-AUC, official scoring, significance
-  experiments/             feature ablation, architecture search, GO-term-group analyses
+  experiments/             feature ablation, architecture search, GO-term-group analyses, XGBoost comparison
   explain/                 SHAP attributions and the explainability report
 scripts/                   data download and rebuild (scripts/data/), repo utilities
 tests/                     unit tests (uv run pytest)

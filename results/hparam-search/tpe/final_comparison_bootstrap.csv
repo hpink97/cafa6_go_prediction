@@ -1,0 +1,11 @@
+reference,other,metric,delta,ci_low,ci_high,p_bootstrap,n_seeds,n_bootstrap
+arch3_trial110,winner_esm2_prot_tax,internal_fmax,0.068162,0.066789,0.069636,0.001,3,1000
+arch3_trial110,winner_esm2_prot_tax,official_f_w_nk_lk,0.033302,0.024693,0.040093,0.001,3,1000
+arch3_trial110,winner_all,internal_fmax,0.065184,0.063773,0.066524,0.001,3,1000
+arch3_trial110,winner_all,official_f_w_nk_lk,0.041711,0.033197,0.047809,0.001,3,1000
+arch3_trial110,arch3_trial95,internal_fmax,0.007134,0.006232,0.008207,0.001,3,1000
+arch3_trial110,arch3_trial95,official_f_w_nk_lk,0.009025,0.002013,0.014885,0.012,3,1000
+arch3_trial110,arch3_trial57,internal_fmax,0.007934,0.007034,0.008891,0.001,3,1000
+arch3_trial110,arch3_trial57,official_f_w_nk_lk,0.001875,-0.003357,0.007045,0.472,3,1000
+arch3_trial95,winner_esm2_prot_tax,internal_fmax,0.061028,0.059502,0.062378,0.001,3,1000
+arch3_trial95,winner_esm2_prot_tax,official_f_w_nk_lk,0.024277,0.016921,0.031555,0.001,3,1000

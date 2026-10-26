@@ -3,13 +3,23 @@
 | Report | What it answers |
 |---|---|
 | [Feature ablation](feature-ablation.md) | Which feature groups help? Do promoters help, and for which GO terms? Internal vs official evaluation, with significance tests |
-| [Architecture search and final model](hparam-search/README.md) | Which architecture works best, and does dropping promoters still win with it? |
+| [Architecture search and final model](hparam-search/README.md) | Which architecture and training recipe work best (random search, then Bayesian optimisation), and do promoters help the final model? |
+| [XGBoost baseline](xgboost-baseline/README.md) | How much does the multi-label network gain over one XGBoost classifier per GO term? |
 | [Explainability](explainability/README.md) | What does the final model rely on? SHAP across all GO terms, deep dives, ESM-2 dimensions, and maps of proteins and GO terms |
 
-**In one sentence:** ESM-2 carries the signal. Promoter embeddings improve per-term ranking,
-especially for "response to …" terms, but lower the official CAFA6 score. The best model is a
-wider network on ESM-2 + handcrafted + kingdom features without promoters (official weighted
-Fmax 0.326).
+**In short:**
+- ESM-2 carries the signal.
+- The best model comes from a Bayesian hyperparameter search: an asymmetric loss, a cosine
+  schedule and a wide network, on all features including promoters. Its official weighted Fmax
+  is **0.361**, against 0.326 before the search (p = 0.001).
+- Promoters lower the official score under the default training recipe but raise it under the
+  tuned one (+0.009, p = 0.012). Either way they help "response to …" terms most.
+
+**Against a per-term XGBoost baseline:** on the same inputs, terms and labels, the network's
+macro ROC-AUC across the top 1,000 GO terms is 0.913 vs 0.879 (+0.034, 95% CI 0.031–0.037). It
+wins on 78% of terms. The final model, without promoters, still leads by +0.023. Most of the
+gain comes on rare terms (+0.045), where per-term models have few positives
+([details](xgboost-baseline/README.md)).
 
 ![Internal holdout vs official CAFA6 score for each model](summary/internal_vs_official.png)
 
@@ -25,8 +35,12 @@ Fmax 0.326).
   - `per_term_auc.csv`;
   - training curves;
   - precision–recall curves.
-- `hparam-search/`: the trial table, hyperparameter effects, and the final architecture ×
-  promoter comparison (runs and bootstrap).
+- `hparam-search/`: the random search's trial table, hyperparameter effects and architecture ×
+  promoter comparison.
+  - `hparam-search/tpe/`: the Bayesian search's trials, search history, validation vs official
+    plot, and the final comparison (runs and bootstrap).
+- `xgboost-baseline/`: per-term AUC of the network against per-term XGBoost, by aspect, term
+  frequency and input group (`uv run python -m modeling.experiments.xgboost_baseline`).
 - `explainability/`: SHAP attributions for every GO term, permutation importance, deep-dive
   beeswarms, ESM-2 dimension analysis, and the protein and GO-term maps
   (`uv run cafa6-explain`).
