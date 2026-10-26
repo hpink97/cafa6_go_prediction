@@ -11,8 +11,10 @@ import argparse
 import gc
 import json
 import logging
+import math
 import random
 from copy import deepcopy
+from functools import partial
 from pathlib import Path
 
 import numpy as np
@@ -22,6 +24,8 @@ from sklearn.metrics import average_precision_score, roc_auc_score
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from torch import nn
+from torch.optim.lr_scheduler import LambdaLR
+from torch.optim.swa_utils import AveragedModel, get_ema_multi_avg_fn
 from torch.utils.data import DataLoader, TensorDataset
 
 from modeling.data import (
@@ -62,6 +66,15 @@ from modeling.nn.score_channels import (
 )
 
 LOGGER = logging.getLogger("cafa6.modeling.multilabel_nn")
+
+
+def _learning_rate_factor(epoch: int, schedule: str, warmup_epochs: int, epochs: int) -> float:
+    """Multiplier on the base learning rate for 0-based `epoch`: linear warmup, then constant or cosine to 0."""
+    if epoch < warmup_epochs:
+        return (epoch + 1) / warmup_epochs
+    if schedule == "cosine":
+        return 0.5 * (1 + math.cos(math.pi * (epoch - warmup_epochs) / max(1, epochs - warmup_epochs)))
+    return 1.0
 
 
 def _set_random_seed(random_state: int) -> None:
@@ -128,6 +141,7 @@ def _train_epoch(
     optimizer: torch.optim.Optimizer,
     device: torch.device,
     gradient_clip: float,
+    ema: AveragedModel | None = None,
 ) -> float:
     model.train()
     total_loss = 0.0
@@ -142,6 +156,8 @@ def _train_epoch(
         if gradient_clip > 0:
             nn.utils.clip_grad_norm_(model.parameters(), gradient_clip)
         optimizer.step()
+        if ema is not None:
+            ema.update_parameters(model)
         total_loss += loss.item() * len(batch_features)
         total_samples += len(batch_features)
     return total_loss / total_samples
@@ -296,6 +312,11 @@ def run(
     projection_dims: dict[str, int] | None = None,
     promoter_fusion_dim: int = PROMOTER_FUSION_DIM,
     trunk_layers: int = 2,
+    trunk_residual: bool = False,
+    lr_schedule: str = "constant",
+    warmup_epochs: int = 0,
+    ema_decay: float = 0.0,
+    progress_file: Path | None = None,
 ) -> None:
     if output_dir.exists() and any(output_dir.iterdir()) and not overwrite:
         raise FileExistsError(f"Output directory {output_dir} is not empty; pass --overwrite to replace its artifacts")
@@ -506,6 +527,7 @@ def run(
         projection_dims=projection_dims,
         promoter_fusion_dim=promoter_fusion_dim,
         trunk_layers=trunk_layers,
+        trunk_residual=trunk_residual,
     ).to(device)
     criterion, pos_weights = make_loss(
         loss_name,
@@ -521,6 +543,10 @@ def run(
         lr=learning_rate,
         weight_decay=weight_decay,
     )
+    scheduler = LambdaLR(optimizer, partial(_learning_rate_factor, schedule=lr_schedule, warmup_epochs=warmup_epochs, epochs=epochs))
+    # With EMA, validation, checkpointing and the saved model all use the averaged weights.
+    ema = AveragedModel(model, multi_avg_fn=get_ema_multi_avg_fn(ema_decay)) if ema_decay > 0 else None
+    evaluated_model = ema.module if ema is not None else model
     projection_dims = {**DEFAULT_PROJECTION_DIMS, **(projection_dims or {})}
     n_parameters = sum(parameter.numel() for parameter in model.parameters())
     LOGGER.info("model has %d trainable parameters", n_parameters)
@@ -531,9 +557,11 @@ def run(
     best_state = None
     epochs_without_improvement = 0
     for epoch in range(1, epochs + 1):
-        train_loss = _train_epoch(model, train_loader, criterion, optimizer, device, gradient_clip)
+        train_loss = _train_epoch(model, train_loader, criterion, optimizer, device, gradient_clip, ema)
+        learning_rate_used = optimizer.param_groups[0]["lr"]
+        scheduler.step()
         validation_loss, validation_probabilities, validation_targets = _predict(
-            model,
+            evaluated_model,
             validation_loader,
             criterion,
             device,
@@ -587,7 +615,7 @@ def run(
                 "train_loss": train_loss,
                 "validation_loss": validation_loss,
                 **validation_summary,
-                "learning_rate": optimizer.param_groups[0]["lr"],
+                "learning_rate": learning_rate_used,
             }
         )
         LOGGER.info(
@@ -599,10 +627,14 @@ def run(
             validation_summary["macro_average_precision"],
             validation_summary["cafa_fmax_mean"],
         )
+        if progress_file is not None:
+            # One JSON line per epoch, so a caller (the hyperparameter search) can prune a losing run early.
+            with progress_file.open("a") as progress:
+                progress.write(json.dumps({"epoch": epoch, "selection_score": float(selection_score)}) + "\n")
         if selection_score > best_score + min_delta:
             best_score = selection_score
             best_epoch = epoch
-            best_state = deepcopy(model.state_dict())
+            best_state = deepcopy(evaluated_model.state_dict())
             epochs_without_improvement = 0
         else:
             epochs_without_improvement += 1
@@ -877,6 +909,7 @@ def run(
             "projection_dims": projection_dims,
             "promoter_fusion_dim": promoter_fusion_dim,
             "trunk_layers": trunk_layers,
+            "trunk_residual": trunk_residual,
             "terms": terms,
             "base_terms": base_terms,
             "ancestor_closure": ancestor_closure,
@@ -968,6 +1001,10 @@ def run(
         "projection_dims": projection_dims,
         "promoter_fusion_dim": promoter_fusion_dim,
         "trunk_layers": trunk_layers,
+        "trunk_residual": trunk_residual,
+        "lr_schedule": lr_schedule,
+        "warmup_epochs": warmup_epochs,
+        "ema_decay": ema_decay,
         "agront_nonapplicable_rows_zeroed_after_scaling": True,
         "max_train_samples": max_train_samples,
         "max_validation_samples": max_validation_samples,
@@ -1068,6 +1105,11 @@ def main() -> None:
         help=f"Override branch projection widths, e.g. promoter_nt=64 (defaults: {DEFAULT_PROJECTION_DIMS})",
     )
     parser.add_argument("--promoter-fusion-dim", type=int, default=PROMOTER_FUSION_DIM, help="Width of the fused promoter vector entering the trunk")
+    parser.add_argument("--trunk-residual", action="store_true", help="Make the trunk_dim -> trunk_dim trunk layers pre-norm residual blocks")
+    parser.add_argument("--lr-schedule", choices=("constant", "cosine"), default="constant", help="Per-epoch learning-rate schedule; cosine decays to 0 at --epochs")
+    parser.add_argument("--warmup-epochs", type=int, default=0, help="Linear learning-rate warmup epochs")
+    parser.add_argument("--ema-decay", type=float, default=0.0, help="Exponential moving average of the weights, updated every step (0 = off)")
+    parser.add_argument("--progress-file", type=Path, default=None, help="Append each epoch's checkpoint score to this file as a JSON line")
     parser.add_argument("--loss", choices=("bce", "weighted_bce", "asymmetric"), default="weighted_bce")
     parser.add_argument("--max-pos-weight", type=float, default=20.0)
     parser.add_argument("--gamma-negative", type=float, default=4.0)

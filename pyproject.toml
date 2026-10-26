@@ -11,6 +11,7 @@ dependencies = [
     "fair-esm>=2.0.0",
     "lightgbm>=4.7.0",
     "matplotlib>=3.11.2",
+    "optuna>=5.0.0",
     "pandas>=3.0.5",
     "requests>=2.32.0",
     "scikit-learn>=1.9.1",

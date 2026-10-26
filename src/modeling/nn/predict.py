@@ -105,6 +105,7 @@ def load_trained_model(model_dir: Path, device: torch.device | str = "cpu") -> T
         projection_dims=checkpoint.get("projection_dims"),
         promoter_fusion_dim=checkpoint.get("promoter_fusion_dim", PROMOTER_FUSION_DIM),
         trunk_layers=checkpoint.get("trunk_layers", 2),
+        trunk_residual=checkpoint.get("trunk_residual", False),
     )
     model.load_state_dict(checkpoint["model_state_dict"])
     model.to(device).eval()

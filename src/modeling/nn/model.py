@@ -41,6 +41,17 @@ def feature_group_indices(feature_names: list[str]) -> dict[str, list[int]]:
     return {name: indices for name, indices in groups.items() if indices}
 
 
+class ResidualBlock(nn.Module):
+    """Pre-norm residual MLP layer: x + dropout(GELU(linear(layernorm(x))))."""
+
+    def __init__(self, dim: int, dropout: float) -> None:
+        super().__init__()
+        self.layer = nn.Sequential(nn.LayerNorm(dim), nn.Linear(dim, dim), nn.GELU(), nn.Dropout(dropout))
+
+    def forward(self, features: torch.Tensor) -> torch.Tensor:
+        return features + self.layer(features)
+
+
 class MultilabelGOModel(nn.Module):
     """Project each feature modality, then share a compact prediction trunk."""
 
@@ -55,6 +66,7 @@ class MultilabelGOModel(nn.Module):
         projection_dims: dict[str, int] | None = None,
         promoter_fusion_dim: int = PROMOTER_FUSION_DIM,
         trunk_layers: int = 2,
+        trunk_residual: bool = False,
     ) -> None:
         super().__init__()
         if trunk_layers < 2:
@@ -91,11 +103,16 @@ class MultilabelGOModel(nn.Module):
             )
         fused_dim = non_promoter_dim + (promoter_fusion_dim if promoter_dim else 0)
 
-        # Two layers keep the original module layout, so older checkpoints still load.
+        # Two layers keep the original module layout, so older checkpoints still load. With
+        # `trunk_residual`, the trunk_dim -> trunk_dim layers between the first and the bottleneck
+        # layer become residual blocks, so depth can be added without losing the input signal.
         widths = [fused_dim] + [trunk_dim] * (trunk_layers - 1) + [bottleneck_dim]
         trunk: list[nn.Module] = []
-        for in_dim, out_dim in zip(widths[:-1], widths[1:]):
-            trunk += [nn.Linear(in_dim, out_dim), nn.GELU(), nn.Dropout(trunk_dropout)]
+        for layer, (in_dim, out_dim) in enumerate(zip(widths[:-1], widths[1:])):
+            if trunk_residual and 0 < layer < trunk_layers - 1:
+                trunk.append(ResidualBlock(trunk_dim, trunk_dropout))
+            else:
+                trunk += [nn.Linear(in_dim, out_dim), nn.GELU(), nn.Dropout(trunk_dropout)]
         self.trunk = nn.Sequential(*trunk)
         self.classifier = nn.Linear(bottleneck_dim, n_terms)
 
