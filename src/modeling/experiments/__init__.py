@@ -1,1 +1,1 @@
-"""Experiments: feature-group ablation, architecture search and GO-term-group analyses."""
+"""Experiments: feature-group ablation, architecture search, GO-term-group analyses and the XGBoost baseline comparison."""
