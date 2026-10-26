@@ -1,0 +1,28 @@
+network,network_label,category,n_terms,network_macro_auc,xgb_macro_auc,gap_mean,gap_ci_low,gap_ci_high,gap_median,network_win_share,wilcoxon_p
+wider_all,"network, same features (wider, all)",all terms,1000,0.9132,0.8789,0.03427,0.031,0.03747,0.02615,0.779,4.556e-87
+wider_all,"network, same features (wider, all)",Biological process,575,0.9028,0.8608,0.04207,0.03775,0.04663,0.03606,0.8035,5.301e-59
+wider_all,"network, same features (wider, all)",Molecular function,174,0.9262,0.902,0.02427,0.01864,0.03106,0.01674,0.7471,2.695e-13
+wider_all,"network, same features (wider, all)",Cellular component,251,0.9278,0.9045,0.02331,0.01697,0.0292,0.01761,0.745,2.142e-18
+wider_all,"network, same features (wider, all)",'response to ...' processes,87,0.8734,0.8138,0.05956,0.0473,0.07273,0.05105,0.8966,1.524e-12
+wider_all,"network, same features (wider, all)",other processes,488,0.9081,0.8691,0.03896,0.03404,0.04342,0.03407,0.7869,5.125e-48
+wider_all,"network, same features (wider, all)",rare terms (by training positives),334,0.9175,0.8723,0.04523,0.03818,0.05128,0.03745,0.8054,5.353e-34
+wider_all,"network, same features (wider, all)",intermediate terms (by training positives),333,0.9181,0.8777,0.04037,0.03532,0.04611,0.03231,0.8048,7.37e-36
+wider_all,"network, same features (wider, all)",common terms (by training positives),333,0.9039,0.8868,0.01717,0.01292,0.02133,0.01347,0.7267,6.279e-21
+default_all,"network, default architecture, all features",all terms,1000,0.9068,0.8789,0.02788,0.02444,0.03116,0.01988,0.709,5.681e-59
+default_all,"network, default architecture, all features",Biological process,575,0.897,0.8608,0.03619,0.03142,0.04093,0.02988,0.7443,4.731e-45
+default_all,"network, default architecture, all features",Molecular function,174,0.9172,0.902,0.01523,0.009197,0.02186,0.01003,0.6207,7.82e-06
+default_all,"network, default architecture, all features",Cellular component,251,0.9221,0.9045,0.01761,0.01066,0.02343,0.01446,0.6892,6.696e-12
+default_all,"network, default architecture, all features",'response to ...' processes,87,0.8665,0.8138,0.05269,0.03962,0.06666,0.04916,0.8046,3.019e-10
+default_all,"network, default architecture, all features",other processes,488,0.9024,0.8691,0.03324,0.0281,0.03785,0.02875,0.7336,2.332e-36
+default_all,"network, default architecture, all features",rare terms (by training positives),334,0.912,0.8723,0.03974,0.03234,0.04616,0.03402,0.7545,1.419e-27
+default_all,"network, default architecture, all features",intermediate terms (by training positives),333,0.9114,0.8777,0.03371,0.02838,0.03938,0.02633,0.7568,1.493e-26
+default_all,"network, default architecture, all features",common terms (by training positives),333,0.8969,0.8868,0.01015,0.005868,0.01445,0.007054,0.6156,3.261e-09
+final,"final network (wider, no promoters)",all terms,1000,0.9015,0.8789,0.02256,0.01916,0.0258,0.01776,0.686,7.522e-45
+final,"final network (wider, no promoters)",Biological process,575,0.8884,0.8608,0.02766,0.02286,0.03221,0.02373,0.7043,1.396e-31
+final,"final network (wider, no promoters)",Molecular function,174,0.9215,0.902,0.0195,0.01374,0.02641,0.01415,0.7011,1.467e-09
+final,"final network (wider, no promoters)",Cellular component,251,0.9175,0.9045,0.01298,0.006107,0.01905,0.009929,0.6335,1.204e-07
+final,"final network (wider, no promoters)",'response to ...' processes,87,0.853,0.8138,0.03923,0.02633,0.05256,0.03043,0.7701,1.165e-07
+final,"final network (wider, no promoters)",other processes,488,0.8947,0.8691,0.0256,0.02064,0.03039,0.02337,0.6926,1.457e-25
+final,"final network (wider, no promoters)",rare terms (by training positives),334,0.9041,0.8723,0.03189,0.02463,0.03806,0.02484,0.7186,1.024e-20
+final,"final network (wider, no promoters)",intermediate terms (by training positives),333,0.907,0.8777,0.02926,0.02438,0.0348,0.02347,0.7508,2.017e-23
+final,"final network (wider, no promoters)",common terms (by training positives),333,0.8933,0.8868,0.006502,0.002082,0.01084,0.00648,0.5886,9.375e-06

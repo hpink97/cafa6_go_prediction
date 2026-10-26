@@ -1,0 +1,21 @@
+aspect,group,selected_share,gain_share,input_share,selection_enrichment
+all,ESM-2,0.6892,0.7006,0.2357,2.9239
+all,handcrafted,0.0359,0.0586,0.0206,1.7399
+all,kingdom,0.0015,0.0194,0.0026,0.5989
+all,NT promoter,0.2416,0.1897,0.1886,1.2812
+all,AgroNT promoter,0.0317,0.0318,0.5525,0.0574
+F,ESM-2,0.7181,0.7719,0.2357,3.0462
+F,handcrafted,0.0369,0.0693,0.0206,1.7866
+F,kingdom,0.0009,0.0117,0.0026,0.3388
+F,NT promoter,0.215,0.1323,0.1886,1.1401
+F,AgroNT promoter,0.0292,0.0149,0.5525,0.0528
+C,ESM-2,0.6915,0.6881,0.2357,2.9335
+C,handcrafted,0.036,0.0704,0.0206,1.7469
+C,kingdom,0.002,0.0291,0.0026,0.7912
+C,NT promoter,0.235,0.1754,0.1886,1.246
+C,AgroNT promoter,0.0355,0.037,0.5525,0.0642
+P,ESM-2,0.6795,0.6844,0.2357,2.8826
+P,handcrafted,0.0355,0.0501,0.0206,1.7228
+P,kingdom,0.0015,0.0175,0.0026,0.5936
+P,NT promoter,0.2525,0.2133,0.1886,1.3392
+P,AgroNT promoter,0.0309,0.0346,0.5525,0.0559
